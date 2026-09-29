@@ -1,0 +1,20 @@
+name: Two-bot Simulation Evaluation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  simulation-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Run Two-bot Voice Agent Simulation
+        run: |
+          pip install -e .
+          pytest tests/e2e/test_voice_turn_loop.py tests/e2e/test_interruption_barge_in.py

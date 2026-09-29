@@ -1,0 +1,14 @@
+asr_hallucination:
+  unique_token_ratio_min: 0.40
+  max_consecutive_word_repeat: 4
+  blacklist_patterns:
+    - "hãy like và subscribe"
+    - "chúc các bạn xem video vui vẻ"
+    - "phụ đề được thực hiện bởi"
+
+post_tts_grace:
+  lockout_duration_seconds: 0.75
+
+language_strictness:
+  allowed_scripts: ["LATIN", "VIETNAMESE"]
+  max_foreign_script_ratio: 0.05

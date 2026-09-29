@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+.env.local
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Data and indices
+data/indices/faiss/*.faiss
+data/indices/faiss/*.json
+data/indices/bm25/*.pkl
+data/indices/graph/*
+data/storage/*.db
+data/storage/*.jsonl
+
+# Testing & Linting
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Logs & Traces
+*.log
+logs/
+
+# Operating System
+.DS_Store
+Thumbs.db

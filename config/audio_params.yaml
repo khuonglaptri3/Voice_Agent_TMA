@@ -1,0 +1,11 @@
+sample_rate: 16000
+channels: 1
+frame_duration_ms: 20
+frame_size_bytes: 640 # 16000 * 0.02 * 2 bytes (PCM 16-bit)
+vad:
+  engine: "silero"
+  threshold: 0.5
+  min_speech_duration_ms: 400
+  min_silence_duration_ms: 500
+  rms_energy_threshold: 0.0015
+  speech_frame_ratio_min: 0.07

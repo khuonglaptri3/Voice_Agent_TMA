@@ -1,0 +1,27 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install ruff mypy pytest
+          pip install -e .
+      - name: Lint with Ruff
+        run: ruff check src tests
+      - name: Type check with Mypy
+        run: mypy src
+      - name: Run Unit Tests
+        run: pytest tests/unit

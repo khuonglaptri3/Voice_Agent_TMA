@@ -1,0 +1,19 @@
+llm:
+  provider: "openai" # or "vllm", "llama_cpp"
+  model_name: "gpt-4o-mini"
+  temperature: 0.3
+  max_tokens: 256
+
+stt:
+  engine: "whisper_cpp" # or "parakeet", "deepgram"
+  model_path: "models/whisper/ggml-base.bin"
+  language: "vi"
+
+tts:
+  engine: "piper" # or "elevenlabs", "f5_tts"
+  model_path: "models/tts/vi_vivos.onnx"
+  sample_rate: 16000
+
+embeddings:
+  model_name: "intfloat/multilingual-e5-small"
+  dimension: 384
