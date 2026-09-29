@@ -35,5 +35,4 @@ logs/
 .DS_Store
 Thumbs.db
 # 
-docs/
-
+*.egg-info/
