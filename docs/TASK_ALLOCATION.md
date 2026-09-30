@@ -1,8 +1,9 @@
 # Kế Hoạch Phân Công Nhiệm Vụ 2 Lập Trình Viên (Chi Tiết Kỹ Thuật)
+
 ## Dự Án: PoC Voice Agent Speech-to-Speech & Nghiên Cứu Duplex Voice (1 Tuần)
 
-> **Thời gian thực hiện:** 7 Ngày làm việc  
-> **Quy mô đội ngũ:** 2 Kỹ sư phần mềm (**Dev A** và **Dev B**)  
+> **Thời gian thực hiện:** 7 Ngày làm việc
+> **Quy mô đội ngũ:** 2 Kỹ sư phần mềm (**Dev A** và **Dev B**)
 > **Mục tiêu:** Tối ưu hóa hiệu suất làm việc song song, xác định rõ hợp đồng giao tiếp (Contract-First), phân chia chi tiết từng buổi làm việc và checklist kiểm thử cho từng đầu việc.
 
 ---
@@ -21,7 +22,7 @@ flowchart LR
         FlushControl["Buffer Truncation & AEC Filter"]
         UIApp["Web Test UI (Live Transcript & Metrics)"]
         WSGateway["FastAPI WebSocket Gateway (/ws/live)"]
-        
+      
         Mic --> Worklet --> WSGateway
         WSGateway --> Player
         FlushControl -.-> Player
@@ -35,7 +36,7 @@ flowchart LR
         GeminiLive["Gemini Multimodal Live API"]
         ToolManager["Tool Execution (get_time, check_room)"]
         LatencyTracer["Latency Profiler (TTFA P50/P90)"]
-        
+      
         LiveQueue --> ADKRunner
         ADKRunner <--> GeminiLive
         ADKRunner <--> AgentConfig
@@ -53,6 +54,7 @@ flowchart LR
 Để hai lập trình viên có thể phát triển độc lập mà không cần chờ đợi nhau, giao thức WebSocket `/ws/live` được chuẩn hóa chi tiết như sau:
 
 ### 2.1. Luồng Âm Thanh Nhị Phân (Binary Streams)
+
 * **Client gửi lên Server (Mic Input):**
   - Định dạng: Linear PCM, 16-bit Signed Integer (`int16`), Little-Endian, 1 kênh (Mono).
   - Tần số lấy mẫu: **16.000 Hz**.
@@ -66,7 +68,9 @@ flowchart LR
 ### 2.2. Luồng Điều Khiển Văn Bản (JSON Control Messages)
 
 #### A. Server $\rightarrow$ Client (Thông điệp từ Dev A sang Dev B)
+
 1. **Lệnh ngắt lời khẩn cấp (`interrupted`):**
+
    ```json
    {
      "type": "interrupted",
@@ -74,9 +78,10 @@ flowchart LR
      "reason": "user_barge_in"
    }
    ```
-   *Yêu cầu Dev B:* Lập tức dừng phát `AudioBufferSourceNode` hiện tại và xóa sạch toàn bộ hàng đợi âm thanh chưa phát.
 
+   *Yêu cầu Dev B:* Lập tức dừng phát `AudioBufferSourceNode` hiện tại và xóa sạch toàn bộ hàng đợi âm thanh chưa phát.
 2. **Dữ liệu phụ đề trực tiếp (`transcript`):**
+
    ```json
    {
      "type": "transcript",
@@ -85,6 +90,7 @@ flowchart LR
      "is_final": true
    }
    ```
+
    ```json
    {
      "type": "transcript",
@@ -93,8 +99,8 @@ flowchart LR
      "is_final": false
    }
    ```
-
 3. **Trạng thái thực thi công cụ (`tool_event`):**
+
    ```json
    {
      "type": "tool_event",
@@ -103,8 +109,8 @@ flowchart LR
      "params": {"room_name": "Phòng A"}
    }
    ```
-
 4. **Chỉ số đo độ trễ (`latency_metric`):**
+
    ```json
    {
      "type": "latency_metric",
@@ -115,7 +121,9 @@ flowchart LR
    ```
 
 #### B. Client $\rightarrow$ Server (Thông điệp từ Dev B sang Dev A)
+
 1. **Khởi tạo và cấu hình phiên (`session_start`):**
+
    ```json
    {
      "type": "session_start",
@@ -124,8 +132,8 @@ flowchart LR
      "language": "vi-VN"
    }
    ```
-
 2. **Kết thúc cuộc gọi (`session_stop`):**
+
    ```json
    {
      "type": "session_stop",
@@ -213,6 +221,7 @@ flowchart TD
 ### NGÀY 1: Thiết Lập Nền Tảng & Môi Trường Độc Lập
 
 #### Dev A: AI & ADK Core Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Cập nhật [pyproject.toml](file:///home/intern-nvnguyen1/Project/Voice_Agent_TMA/pyproject.toml): thêm `google-adk>=0.1.0`, `google-genai>=0.1.0`, `websockets>=12.0`, `sounddevice>=0.4.6`, `numpy>=1.24.0`.
   - Thiết lập môi trường ảo và cài đặt gói: `pip install -e .`.
@@ -229,6 +238,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev A):** Chạy lệnh `python scripts/hello_adk_live.py`, nói vào mic và nghe loa phát âm thanh phản hồi từ Gemini Live.
 
 #### Dev B: Audio Gateway & Web Client Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Khởi tạo cấu trúc thư mục giao diện `web/` (`web/index.html`, `web/app.js`, `web/audio_worklet.js`, `web/style.css`).
   - Viết `web/audio_worklet.js`:
@@ -241,6 +251,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev B):** Mở trình duyệt, bật mic, mock server ghi nhận liên tục các gói nhị phân đúng 1.024 bytes mỗi 32ms.
 
 #### Buổi Sync Cuối Ngày 1 (17:30 - 18:00)
+
 - Hai Dev đối chiếu gói tin WebSocket, kiểm tra độ tương thích kiểu dữ liệu `Int16Array` $\leftrightarrow$ `bytes`.
 - Ký duyệt hợp đồng giao tiếp tại Mục 2.
 
@@ -249,6 +260,7 @@ flowchart TD
 ### NGÀY 2: Hiện Thực Hóa Gateway & Tích Hợp LiveRequestQueue
 
 #### Dev A: AI & ADK Core Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Hiện thực hóa [src/orchestration/engine/turn_orchestrator.py](file:///home/intern-nvnguyen1/Project/Voice_Agent_TMA/src/orchestration/engine/turn_orchestrator.py):
     - Khởi tạo class `ADKLiveOrchestrator`.
@@ -263,6 +275,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev A):** Chạy unit test giả lập đẩy 10 audio chunks vào queue, orchestrator kích hoạt `run_live()` không báo lỗi.
 
 #### Dev B: Audio Gateway & Web Client Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Hiện thực hóa [src/gateway/transports/websocket_transport.py](file:///home/intern-nvnguyen1/Project/Voice_Agent_TMA/src/gateway/transports/websocket_transport.py):
     - Xử lý vòng lặp tiếp nhận WebSocket `websocket.receive()` phân biệt `bytes` và `text`.
@@ -275,6 +288,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev B):** Trình duyệt kết nối được tới `ws://localhost:8000/ws/live` và gửi/nhận thông điệp handshake thành công.
 
 #### Buổi Sync Cuối Ngày 2 (17:30 - 18:00)
+
 - **Tích hợp Cột mốc 1:** Nối `websocket_transport.py` của Dev B vào `turn_orchestrator.py` của Dev A.
 - **Kịch bản kiểm thử:** Nói một từ vào trình duyệt $\rightarrow$ Log server hiển thị Gemini nhận được gói âm thanh và sinh phản hồi.
 
@@ -283,6 +297,7 @@ flowchart TD
 ### NGÀY 3: Bộ Phát Âm Thanh Nối Tiếp & Giao Diện Web Hoàn Chỉnh
 
 #### Dev A: AI & ADK Core Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Tinh chỉnh Prompt chỉ định phong cách hội thoại (Persona):
     - Đặt tính cách: Trợ lý giọng nói tiếng Việt ngắn gọn, súc tích, ngữ điệu thân thiện.
@@ -295,6 +310,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev A):** Transcript thời gian thực được đẩy ra callback đầy đủ khi có tiếng người nói.
 
 #### Dev B: Audio Gateway & Web Client Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Xây dựng **Streaming Audio Player** trong `web/app.js`:
     - Tạo `AudioContext` và danh sách hàng đợi các mảng âm thanh `audioQueue = []`.
@@ -308,6 +324,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev B):** Khi server bắn về mảng audio bytes liên tục, trình duyệt phát ra âm thanh rõ ràng, không bị giật, rè hay méo tiếng.
 
 #### Buổi Sync Cuối Ngày 3 (17:30 - 18:00)
+
 - **CỘT MỐC QUAN TRỌNG (MILESTONE 1):** Chạy cuộc gọi thử nghiệm hoàn chỉnh trên trình duyệt. Người dùng nói chuyện trực tiếp bằng tiếng Việt $\rightarrow$ AI trả lời bằng giọng nói và hiển thị phụ đề.
 
 ---
@@ -315,6 +332,7 @@ flowchart TD
 ### NGÀY 4: Nghiên Cứu Chuyên Sâu Barge-in & Triệt Tiêu Dội Âm (AEC)
 
 #### Dev A: AI & ADK Core Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Phân tích cơ chế phát hiện ngắt lời của Gemini Live:
     - Khi người dùng nói chen ngang, ADK sinh sự kiện `interrupted=True`.
@@ -326,6 +344,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev A):** Khi phát hiện tiếng người dùng nói chen, server bắn ngay thông điệp `interrupted` trong vòng < 50ms.
 
 #### Dev B: Audio Gateway & Web Client Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Lập trình cơ chế **Audio Playback Buffer Truncation** tại `web/app.js`:
     - Khi nhận sự kiện `interrupted`:
@@ -339,6 +358,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev B):** Khi AI đang nói câu dài, người dùng cất tiếng ngắt ngang $\rightarrow$ Loa tắt tiếng lập tức (< 250ms), không để phát nốt âm thanh cũ.
 
 #### Buổi Sync Cuối Ngày 4 (17:30 - 18:00)
+
 - **CỘT MỐC QUAN TRỌNG (MILESTONE 2 - DU PLEX EXPERIMENT):** Hai Dev kiểm thử kịch bản ngắt lời đối kháng:
   - Ca 1: Ngắt lời bằng câu nói to rõ $\rightarrow$ Agent dừng nói và lắng nghe câu mới.
   - Ca 2: Bật loa ngoài không dùng tai nghe $\rightarrow$ Agent không bị hiện tượng tự ngắt do dội âm.
@@ -348,6 +368,7 @@ flowchart TD
 ### NGÀY 5: Tích Hợp Gọi Công Cụ Giữa Dòng Thoại (Mid-Speech Tooling)
 
 #### Dev A: AI & ADK Core Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Tạo tệp `src/tools/sample_tools.py` định nghĩa 2 công cụ Python chuẩn định dạng ADK Tool:
     ```python
@@ -365,6 +386,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev A):** Đặt câu hỏi thoại: *"Bây giờ là mấy giờ?"* $\rightarrow$ Model gọi `get_current_time` và phát âm thanh trả lời đúng giờ thực tế.
 
 #### Dev B: Audio Gateway & Web Client Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Thiết kế thành phần hiển thị trạng thái công cụ trên Web UI:
     - Khi nhận `status: "executing"`: Hiển thị badge động *"AI đang tra cứu dữ liệu..."*.
@@ -376,6 +398,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev B):** Giao diện web hiển thị mượt mà quá trình gọi tool và phản hồi âm thanh phát ra chuẩn xác.
 
 #### Buổi Sync Cuối Ngày 5 (17:30 - 18:00)
+
 - Hai Dev cùng thực hiện bài test: Vừa gọi hàm tra cứu phòng họp vừa ngắt lời chen ngang để kiểm tra độ bền vững (Robustness) của máy trạng thái ADK.
 
 ---
@@ -383,6 +406,7 @@ flowchart TD
 ### NGÀY 6: Đo Lường Chỉ Số Hiệu Năng & Thu Thập Dữ Liệu Nghiên Cứu
 
 #### Dev A: AI & ADK Core Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Hiện thực hóa [src/observability/tracing/pipeline_tracer.py](file:///home/intern-nvnguyen1/Project/Voice_Agent_TMA/src/observability/tracing/pipeline_tracer.py):
     - Đặt mốc thời gian: $T_0$ (User dứt câu), $T_{\text{first\_chunk}}$ (Audio frame đầu tiên trả về từ Gemini).
@@ -394,6 +418,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev A):** File số liệu benchmark độ trễ server được tạo đầy đủ với ít nhất 20 mẫu đo.
 
 #### Dev B: Audio Gateway & Web Client Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Lập trình đo độ trễ đầu cuối (End-to-End Latency) trực tiếp trong `web/app.js`:
     - Đo thời gian từ lúc micro dừng thu âm đến khi loa phát tiếng đầu tiên.
@@ -407,6 +432,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev B):** Giao diện web hiển thị đồng hồ đo độ trễ theo thời gian thực cho từng lượt nói.
 
 #### Buổi Sync Cuối Ngày 6 (17:30 - 18:00)
+
 - Ghép bảng số liệu của Dev A (Server TTFA) và Dev B (End-to-End TTFA) để tính toán độ trễ mạng phát sinh trên kết nối WebSocket.
 
 ---
@@ -414,6 +440,7 @@ flowchart TD
 ### NGÀY 7: Báo Cáo Nghiên Cứu, Dọn Dẹp Mã Nguồn & Chuẩn Bị Demo
 
 #### Dev A: AI & ADK Core Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Soạn thảo tài liệu báo cáo kỹ thuật `docs/duplex_voice_research.md`:
     - Phân tích ưu nhược điểm của Google ADK & Gemini Live API trong môi trường hội thoại thoại.
@@ -425,6 +452,7 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev A):** File báo cáo `docs/duplex_voice_research.md` hoàn thiện đầy đủ đồ thị, bảng biểu và nhận định chuyên môn.
 
 #### Dev B: Audio Gateway & Web Client Lead
+
 * **Buổi sáng (08:30 - 12:00):**
   - Cập nhật hướng dẫn cài đặt và khởi chạy hệ thống tại [README.md](file:///home/intern-nvnguyen1/Project/Voice_Agent_TMA/README.md).
   - Tinh chỉnh giao diện Web cho chuyên nghiệp, hiển thị logo TMA, tối ưu bố cục responsive.
@@ -437,24 +465,25 @@ flowchart TD
 * **Tiêu chí nghiệm thu (DoD Dev B):** Chạy thử kịch bản demo 3 lần liên tiếp không phát sinh lỗi.
 
 #### Buổi Sync Cuối Ngày 7 (17:30 - 18:00)
+
 - **NGHIỆM THU DỰ ÁN (FINAL ACCEPTANCE):** Cả hai Dev chạy kịch bản tổng duyệt Demo trước toàn đội ngũ.
 
 ---
 
 ## 4. Ma Trận Phụ Trách & Quản Trị Tệp Tin (Code Ownership)
 
-| Đường dẫn tệp tin | Dev Chính | Dev Hỗ trợ | Tiêu chí chất lượng (Quality Gate) |
-| :--- | :---: | :---: | :--- |
-| `src/orchestration/engine/turn_orchestrator.py` | **Dev A** | Dev B | Xử lý `LiveRequestQueue` an toàn, không block async loop |
-| `src/tools/sample_tools.py` | **Dev A** | Dev B | Đầy đủ docstring, Pydantic type hints |
-| `src/observability/tracing/pipeline_tracer.py` | **Dev A** | Dev B | Đo đạc chính xác micro-seconds |
-| `scripts/hello_adk_live.py` & `benchmark_duplex.py` | **Dev A** | Dev B | Chạy độc lập qua CLI không phụ thuộc web |
-| `web/audio_worklet.js` & `app.js` | **Dev B** | Dev A | Chuẩn Linear PCM 16kHz, xử lý buffer flush tức thì |
-| `web/index.html` & `style.css` | **Dev B** | Dev A | Trực quan, hiển thị sóng âm và transcript rõ ràng |
-| `src/gateway/transports/websocket_transport.py` | **Dev B** | Dev A | Bắt exception `WebSocketDisconnect` an toàn |
-| `src/guardrails/output_filters/grace_guard.py` | **Dev B** | Dev A | Chặn dội âm loa-mic hiệu quả |
-| `src/serving/main.py` | **Cả 2** | Cả 2 | Điểm tích hợp chung, merge code mỗi cuối ngày |
-| `docs/duplex_voice_research.md` & `README.md` | **Cả 2** | Cả 2 | Đầy đủ số liệu thực nghiệm và hướng dẫn chạy |
+| Đường dẫn tệp tin                                  |   Dev Chính   | Dev Hỗ trợ | Tiêu chí chất lượng (Quality Gate)                       |
+| :------------------------------------------------------ | :-------------: | :----------: | :------------------------------------------------------------ |
+| `src/orchestration/engine/turn_orchestrator.py`       | **Dev A** |    Dev B    | Xử lý`LiveRequestQueue` an toàn, không block async loop |
+| `src/tools/sample_tools.py`                           | **Dev A** |    Dev B    | Đầy đủ docstring, Pydantic type hints                     |
+| `src/observability/tracing/pipeline_tracer.py`        | **Dev A** |    Dev B    | Đo đạc chính xác micro-seconds                           |
+| `scripts/hello_adk_live.py` & `benchmark_duplex.py` | **Dev A** |    Dev B    | Chạy độc lập qua CLI không phụ thuộc web               |
+| `web/audio_worklet.js` & `app.js`                   | **Dev B** |    Dev A    | Chuẩn Linear PCM 16kHz, xử lý buffer flush tức thì       |
+| `web/index.html` & `style.css`                      | **Dev B** |    Dev A    | Trực quan, hiển thị sóng âm và transcript rõ ràng     |
+| `src/gateway/transports/websocket_transport.py`       | **Dev B** |    Dev A    | Bắt exception`WebSocketDisconnect` an toàn                |
+| `src/guardrails/output_filters/grace_guard.py`        | **Dev B** |    Dev A    | Chặn dội âm loa-mic hiệu quả                             |
+| `src/serving/main.py`                                 | **Cả 2** |    Cả 2    | Điểm tích hợp chung, merge code mỗi cuối ngày          |
+| `docs/duplex_voice_research.md` & `README.md`       | **Cả 2** |    Cả 2    | Đầy đủ số liệu thực nghiệm và hướng dẫn chạy     |
 
 ---
 
