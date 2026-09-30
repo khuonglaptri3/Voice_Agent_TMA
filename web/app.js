@@ -48,6 +48,7 @@ const toast = document.getElementById("toast");
 
 // Audio & Network State
 const TARGET_SAMPLE_RATE = 16000;
+const OUTPUT_SAMPLE_RATE = 24000;
 let audioContext = null;
 let micStream = null;
 let workletNode = null;
@@ -58,7 +59,61 @@ let animationFrameId = null;
 let socketConnection = null;
 let isConnected = false;
 let isRecording = false;
+<<<<<<< HEAD
 let startInProgress = false;
+=======
+let isMuted = false;
+let isPlaybackEnabled = false;
+let isSessionActive = false;
+let sessionAckResolver = null;
+let sessionAckRejecter = null;
+
+let callTimerInterval = null;
+let callStartTime = null;
+let totalPacketsReceived = 0;
+let currentFilter = "all";
+let peakMeterValue = 0;
+let totalLogEvents = 0;
+
+// Audio Output Playback Context
+let outputAudioContext = null;
+let nextPlayTime = 0;
+const playbackSources = new Set();
+
+/**
+ * Toast Notification Utility
+ */
+function showToast(message, duration = 2500) {
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.remove("hidden");
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => {
+    toast.classList.add("hidden");
+  }, duration);
+}
+
+/**
+ * Format timestamp for logging
+ */
+function getTimestamp() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, "0");
+  const m = String(now.getMinutes()).padStart(2, "0");
+  const s = String(now.getSeconds()).padStart(2, "0");
+  const ms = String(now.getMilliseconds()).padStart(3, "0");
+  return `${h}:${m}:${s}.${ms}`;
+}
+
+/**
+ * Add an event to the session log
+ */
+function addLog(message, category = "system") {
+  totalLogEvents += 1;
+  if (logCountBadge) {
+    logCountBadge.textContent = `${totalLogEvents} events`;
+  }
+>>>>>>> a786ba6 (feat: integrate WebSocket audio streaming with Gemini Live)
 
   const item = document.createElement("li");
   item.className = `log-item ${category}`;
@@ -107,7 +162,7 @@ function playServerPcmFrame(arrayBuffer) {
   try {
     if (!outputAudioContext) {
       outputAudioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: TARGET_SAMPLE_RATE,
+        sampleRate: OUTPUT_SAMPLE_RATE,
       });
     }
 
@@ -121,12 +176,14 @@ function playServerPcmFrame(arrayBuffer) {
       float32[i] = int16[i] / 32768.0;
     }
 
-    const audioBuffer = outputAudioContext.createBuffer(1, float32.length, TARGET_SAMPLE_RATE);
+    const audioBuffer = outputAudioContext.createBuffer(1, float32.length, OUTPUT_SAMPLE_RATE);
     audioBuffer.copyToChannel(float32, 0);
 
     const source = outputAudioContext.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(outputAudioContext.destination);
+    playbackSources.add(source);
+    source.onended = () => playbackSources.delete(source);
 
     const now = outputAudioContext.currentTime;
     if (nextPlayTime < now) {
@@ -160,16 +217,7 @@ function connectSocket() {
   socketConnection.onopen = () => {
     isConnected = true;
     updateStatus("Connected", true);
-    addLog(`WebSocket transport connected: Full-Duplex PCM 16kHz`, "system");
-
-    socketConnection.send(
-      JSON.stringify({
-        type: "session_start",
-        sample_rate: TARGET_SAMPLE_RATE,
-        client_timestamp: Date.now(),
-        language: "vi-VN",
-      })
-    );
+    addLog("WebSocket transport connected. Start a call to connect Gemini Live.", "system");
   };
 
   socketConnection.onmessage = (event) => {
@@ -181,14 +229,50 @@ function connectSocket() {
         packetCounterSub.textContent = `Packets: ${totalPacketsReceived} received`;
       }
 
-      // Echo audio playback if enabled
-      if (isPlaybackEnabled) {
-        playServerPcmFrame(event.data);
+      playServerPcmFrame(event.data);
+      addLog(`Model audio frame received (${bytes} bytes PCM).`, "audio");
+    } else if (typeof event.data === "string") {
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        addLog(`Server message: ${event.data}`, "server");
+        return;
       }
 
-      addLog(`Echo: ${bytes} bytes PCM Int16 frame received`, "audio");
-    } else if (typeof event.data === "string") {
-      addLog(`Server JSON: ${event.data}`, "server");
+      if (payload.type === "session_ack") {
+        addLog(`Live session ${payload.status}.`, "system");
+      } else if (payload.type === "session_ready") {
+        isSessionActive = true;
+        addLog("Gemini Live session connected.", "system");
+        if (sessionAckResolver) {
+          sessionAckResolver(payload);
+          sessionAckResolver = null;
+          sessionAckRejecter = null;
+        }
+      } else if (payload.type === "error") {
+        const error = new Error(payload.message || payload.code || "Live session failed.");
+        addLog(`Server error (${payload.code}): ${error.message}`, "error");
+        if (sessionAckRejecter) {
+          sessionAckRejecter(error);
+          sessionAckResolver = null;
+          sessionAckRejecter = null;
+        }
+      } else if (payload.type === "transcript") {
+        addLog(`${payload.role === "user" ? "You" : "Agent"}: ${payload.text}`, "server");
+      } else if (payload.type === "interrupted") {
+        playbackSources.forEach((source) => {
+          try { source.stop(); } catch {}
+        });
+        playbackSources.clear();
+        nextPlayTime = outputAudioContext ? outputAudioContext.currentTime : 0;
+        addLog("Agent audio interrupted.", "system");
+      } else if (payload.type === "session_stop") {
+        isSessionActive = false;
+        addLog("Live session stopped.", "system");
+      } else {
+        addLog(`Server: ${event.data}`, "server");
+      }
     }
   };
 
@@ -200,7 +284,54 @@ function connectSocket() {
 
   socketConnection.onerror = () => {
     addLog("WebSocket transport error occurred.", "error");
+    if (sessionAckRejecter) {
+      sessionAckRejecter(new Error("WebSocket connection failed."));
+      sessionAckResolver = null;
+      sessionAckRejecter = null;
+    }
   };
+}
+
+async function ensureSocketConnected() {
+  if (socketConnection && socketConnection.readyState === WebSocket.OPEN) return;
+  if (!socketConnection || socketConnection.readyState === WebSocket.CLOSED) connectSocket();
+
+  await new Promise((resolve, reject) => {
+    const socket = socketConnection;
+    if (socket.readyState === WebSocket.OPEN) {
+      resolve();
+      return;
+    }
+    socket.addEventListener("open", resolve, { once: true });
+    socket.addEventListener("error", () => reject(new Error("Could not connect to the voice server.")), { once: true });
+  });
+}
+
+function startLiveSession() {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      sessionAckResolver = null;
+      sessionAckRejecter = null;
+      reject(new Error("Timed out waiting for the live session response."));
+    }, 10000);
+
+    sessionAckResolver = (payload) => {
+      clearTimeout(timeout);
+      if (payload.type === "session_ready" && payload.status === "connected") resolve(payload);
+      else reject(new Error(`Live session status: ${payload.status}`));
+    };
+    sessionAckRejecter = (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    };
+
+    socketConnection.send(JSON.stringify({
+      type: "session_start",
+      sample_rate: TARGET_SAMPLE_RATE,
+      client_timestamp: Date.now(),
+      language: "vi-VN",
+    }));
+  });
 }
 
 /**
@@ -367,6 +498,7 @@ async function startCall() {
     return;
   }
 
+<<<<<<< HEAD
   startInProgress = true;
   toggleButton.disabled = true;
   toggleButton.textContent = "Starting...";
@@ -379,6 +511,11 @@ async function startCall() {
     if (!isConnected) {
       connectSocket();
     }
+=======
+  try {
+    await ensureSocketConnected();
+    await startLiveSession();
+>>>>>>> a786ba6 (feat: integrate WebSocket audio streaming with Gemini Live)
 
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -524,9 +661,10 @@ function stopCall() {
     micStream = null;
   }
 
-  if (socketConnection && socketConnection.readyState === WebSocket.OPEN) {
+  if (isSessionActive && socketConnection && socketConnection.readyState === WebSocket.OPEN) {
     socketConnection.send(JSON.stringify({ type: "session_stop", reason: "user_hangup" }));
   }
+  isSessionActive = false;
 
   addLog("Microphone streaming stopped.", "system");
   showToast("Audio call ended");
@@ -561,25 +699,31 @@ function toggleMute() {
 }
 
 /**
- * Toggle Speaker Echo Playback
+ * Toggle Agent Audio Playback
  */
 function togglePlayback() {
   isPlaybackEnabled = !isPlaybackEnabled;
 
   if (isPlaybackEnabled) {
-    playbackBtnText.textContent = "Echo Audio: On";
+    if (!outputAudioContext) {
+      outputAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: OUTPUT_SAMPLE_RATE,
+      });
+    }
+    if (outputAudioContext.state === "suspended") outputAudioContext.resume();
+    playbackBtnText.textContent = "Agent Audio: On";
     speakerOnIcon.classList.remove("hidden");
     speakerOffIcon.classList.add("hidden");
     playbackBtn.classList.add("active-state");
-    addLog("Server audio echo playback enabled (Use headphones to prevent echo feedback).", "system");
-    showToast("Echo playback ON");
+    addLog("Agent audio playback enabled. Use headphones to reduce acoustic feedback.", "system");
+    showToast("Agent audio ON");
   } else {
-    playbackBtnText.textContent = "Echo Audio: Off";
+    playbackBtnText.textContent = "Agent Audio: Off";
     speakerOnIcon.classList.add("hidden");
     speakerOffIcon.classList.remove("hidden");
     playbackBtn.classList.remove("active-state");
-    addLog("Server audio echo playback disabled.", "system");
-    showToast("Echo playback OFF");
+    addLog("Agent audio playback disabled.", "system");
+    showToast("Agent audio OFF");
   }
 }
 

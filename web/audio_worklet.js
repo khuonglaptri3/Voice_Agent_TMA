@@ -2,51 +2,57 @@ class AudioCaptureProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.targetSampleRate = 16000;
+    this.inputBuffer = [];
+    this.sourcePosition = 0;
     this.pendingSamples = [];
   }
 
   resampleToTarget(samples) {
-    const actualRate = sampleRate;
-    const ratio = actualRate / this.targetSampleRate;
-    const targetLength = Math.ceil(samples.length / ratio);
-    const resampled = new Float32Array(targetLength);
+    const ratio = sampleRate / this.targetSampleRate;
+    for (let i = 0; i < samples.length; i += 1) {
+      this.inputBuffer.push(samples[i]);
+    }
 
-    for (let i = 0; i < targetLength; i += 1) {
-      const sourceIndex = i * ratio;
-      const lower = Math.floor(sourceIndex);
-      const upper = Math.min(samples.length - 1, lower + 1);
-      const t = sourceIndex - lower;
-      const lo = samples[lower] || 0;
-      const hi = samples[upper] || 0;
-      resampled[i] = lo + (hi - lo) * t;
+    const resampled = [];
+    while (this.sourcePosition + 1 < this.inputBuffer.length) {
+      const lower = Math.floor(this.sourcePosition);
+      const upper = lower + 1;
+      const fraction = this.sourcePosition - lower;
+      const lowSample = this.inputBuffer[lower];
+      const highSample = this.inputBuffer[upper];
+      resampled.push(lowSample + (highSample - lowSample) * fraction);
+      this.sourcePosition += ratio;
+    }
+
+    const consumedSamples = Math.min(
+      Math.floor(this.sourcePosition),
+      this.inputBuffer.length - 1,
+    );
+    if (consumedSamples > 0) {
+      this.inputBuffer.splice(0, consumedSamples);
+      this.sourcePosition -= consumedSamples;
     }
 
     return resampled;
   }
 
-  process(inputs, _outputs, _parameters) {
+  process(inputs) {
     const input = inputs[0];
+    if (!input || !input.length) return true;
 
-    if (!input || !input.length) {
-      return true;
+    const resampled = this.resampleToTarget(input[0]);
+    for (const sample of resampled) {
+      this.pendingSamples.push(sample);
     }
 
-    const channel = input[0];
-    const resampled = this.resampleToTarget(channel);
-
-    for (let i = 0; i < resampled.length; i += 1) {
-      this.pendingSamples.push(resampled[i]);
-
-      if (this.pendingSamples.length >= 512) {
-        const frame = new Int16Array(512);
-
-        for (let j = 0; j < 512; j += 1) {
-          const sample = Math.max(-1, Math.min(1, this.pendingSamples.shift()));
-          frame[j] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-        }
-
-        this.port.postMessage(frame.buffer, [frame.buffer]);
+    while (this.pendingSamples.length >= 512) {
+      const frameSamples = this.pendingSamples.splice(0, 512);
+      const frame = new Int16Array(512);
+      for (let i = 0; i < frameSamples.length; i += 1) {
+        const sample = Math.max(-1, Math.min(1, frameSamples[i]));
+        frame[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
       }
+      this.port.postMessage(frame.buffer, [frame.buffer]);
     }
 
     return true;

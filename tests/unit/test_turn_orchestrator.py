@@ -90,6 +90,8 @@ async def test_orchestrator_processes_10_audio_chunks():
     # Verify that exactly 10 chunks were forwarded to the live session
     assert len(received_audio_chunks) == 10
     assert all(c == sample_chunk for c in received_audio_chunks)
+    live_config = fake_client.aio.live.connect.call_args.kwargs["config"]
+    assert live_config.thinking_config.thinking_level.value == "LOW"
 
 
 @pytest.mark.asyncio
