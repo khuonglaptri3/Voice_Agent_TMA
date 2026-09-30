@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     AUDIO_FRAME_DURATION_MS: int = 20
     
     # Model APIs
-    GEMINI_LIVE_MODEL: str = "gemini-2.0-flash-exp"
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_LIVE_MODEL: str = "gemini-2.5-flash-native-audio-latest"
     OPENAI_API_KEY: Optional[str] = None
     DEEPGRAM_API_KEY: Optional[str] = None
     

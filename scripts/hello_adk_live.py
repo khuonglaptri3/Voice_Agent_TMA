@@ -26,6 +26,13 @@ for conda_path in [
     if os.path.isdir(conda_path):
         os.environ["LD_LIBRARY_PATH"] = f"{conda_path}:{os.environ.get('LD_LIBRARY_PATH', '')}"
 
+# Tự động nạp CA cert của hệ thống nếu SSL_CERT_FILE chưa được đặt (tránh lỗi SSL trên mạng nội bộ TMA)
+if "SSL_CERT_FILE" not in os.environ:
+    for ca_path in ["/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt"]:
+        if os.path.isfile(ca_path):
+            os.environ["SSL_CERT_FILE"] = ca_path
+            break
+
 import numpy as np
 import sounddevice as sd
 from dotenv import load_dotenv
@@ -44,7 +51,7 @@ SAMPLE_WIDTH = 2              # 16-bit PCM = 2 bytes/sample (1024 bytes/chunk)
 def print_banner():
     print("=" * 65)
     print("   VOICE AGENT TMA - NATIVE SPEECH-TO-SPEECH (POC DAY 1)   ")
-    print("   Mô hình: Gemini Live Multimodal API (gemini-2.0-flash-exp)")
+    print("   Mô hình: Gemini Live Multimodal API")
     print("=" * 65)
 
 
@@ -73,7 +80,7 @@ async def live_audio_loop(api_key: str, model_name: str, voice_name: str, in_dev
 
     # Cấu hình Live Connect
     config = types.LiveConnectConfig(
-        response_modalities=[types.LiveServerContentModality.AUDIO],
+        response_modalities=[types.Modality.AUDIO],
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(
@@ -84,9 +91,11 @@ async def live_audio_loop(api_key: str, model_name: str, voice_name: str, in_dev
         system_instruction=types.Content(
             parts=[
                 types.Part.from_text(
-                    "Bạn là Trợ lý giọng nói thông minh bằng tiếng Việt của TMA Solutions. "
-                    "Hãy trả lời thật ngắn gọn, súc tích (dưới 2 câu), thân thiện và tự nhiên. "
-                    "Tuyệt đối không dùng ký tự Markdown, code block hay bảng biểu."
+                    text=(
+                        "Bạn là Trợ lý giọng nói thông minh bằng tiếng Việt của TMA Solutions. "
+                        "Hãy trả lời thật ngắn gọn, súc tích (dưới 2 câu), thân thiện và tự nhiên. "
+                        "Tuyệt đối không dùng ký tự Markdown, code block hay bảng biểu."
+                    )
                 )
             ]
         ),
@@ -237,8 +246,8 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default=os.getenv("GEMINI_LIVE_MODEL", "gemini-2.0-flash-exp"),
-        help="Tên model Gemini Live (mặc định: gemini-2.0-flash-exp)",
+        default=os.getenv("GEMINI_LIVE_MODEL", "gemini-2.5-flash-native-audio-latest"),
+        help="Tên model Gemini Live (mặc định: gemini-2.5-flash-native-audio-latest)",
     )
     parser.add_argument(
         "--voice",

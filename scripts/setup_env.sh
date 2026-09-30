@@ -98,6 +98,15 @@ if [ -n "$PORTAUDIO_DIR" ]; then
     fi
 fi
 
+# Tự động nạp CA cert hệ thống để tránh lỗi SSL trong mạng TMA
+if [ -f "/etc/ssl/certs/ca-certificates.crt" ]; then
+    if ! grep -q "SSL_CERT_FILE" "$VENV_DIR/bin/activate"; then
+        echo -e "\n# Tự động cấu hình CA bundle cho mạng nội bộ" >> "$VENV_DIR/bin/activate"
+        echo "export SSL_CERT_FILE=\"/etc/ssl/certs/ca-certificates.crt\"" >> "$VENV_DIR/bin/activate"
+    fi
+    export SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+fi
+
 # 5. Cấu hình file .env
 echo -e "\n${YELLOW}[5/5] Kiểm tra file cấu hình .env...${NC}"
 if [ ! -f "${PROJECT_ROOT}/.env" ]; then
