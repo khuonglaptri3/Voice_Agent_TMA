@@ -8,16 +8,16 @@ Sự khác biệt căn bản về ngân sách độ trễ và hình thức dữ 
 
 Để dung hòa hai mô hình này trong một hệ thống phần mềm cấp doanh nghiệp, kiến trúc phần mềm phải áp dụng nghiêm ngặt các nguyên lý Kiến trúc Sạch (Clean Architecture)                                                                                        . Bằng cách tách biệt tuyệt đối giữa tầng nghiệp vụ cốt lõi (Domain Core), tầng điều phối kịch bản (Application Orchestration) và tầng điều hợp hạ tầng kỹ thuật (Infrastructure Adapters), hệ thống có khả năng vận hành song song hai cơ chế: chế độ đàm thoại sâu nhiều bước dành cho Chatbot và chế độ phản hồi siêu trễ thấp cho Voice Agent mà không làm trùng lặp logic nghiệp vụ hay gây phụ thuộc cứng vào bất kỳ nhà cung cấp dịch vụ mô hình nào                                                                                        .
 
-| Tiêu chí kỹ thuật | Hệ thống Chatbot Văn bản (Text Agent) | Tác tử Thoại Thời gian thực (Voice Agent) | Kiến trúc Hợp nhất Đa phương thức |
-| --- | --- | --- | --- |
-| **Giao thức mạng chủ đạo** | HTTP/2, REST, Server-Sent Events, WebSocket | WebRTC (RTP/SRTP), SIP, Telephony Media Streams | Đa giao thức thích ứng (WebRTC Transport + HTTP/WS Gateway) |
-| **Cấu trúc luồng dữ liệu** | Khối văn bản tĩnh hoặc chuỗi token văn bản rời rạc | Dòng khung âm thanh nhị phân (Audio Frames 10-20ms) | Khung dữ liệu định kiểu (Typed Frames: Audio, Text, Marker, Signal) |
-| **Ngân sách trễ mục tiêu** | 1.500ms – 8.000ms (ưu tiên độ sâu suy luận) | 400ms – 800ms (ưu tiên thời gian phản hồi âm thanh) | Phân bổ động theo kênh đầu vào (Voice < 600ms, Chat linh hoạt) |
-| **Cơ chế ngắt tương tác** | Hủy tác vụ bất đồng bộ phía máy khách (AbortController) | Ngắt VAD thời gian thực, dọn sạch hàng đợi phát âm thanh | Quản trị vòng đời ngắt tập trung qua tín hiệu điều phối FSM |
-| **Mô hình thực thi công cụ** | JSON Schema Function Calling tiêu chuẩn đa lượt | Ký hiệu hành động dòng (Streaming Action Markers) / RPC nhẹ | Bộ điều hợp kép: Streaming Markers cho Voice, MCP cho Agent |
-| **Cơ chế quản lý bộ nhớ** | Tải toàn bộ lịch sử hội thoại vào cửa sổ ngữ cảnh | Bộ nhớ phân tầng: Trích xuất thực thể ngầm + Cửa sổ trượt | Phân cấp 5 tầng (Working, Buffer, Episodic, Vector, Graph) |
+| Tiêu chí kỹ thuật                   | Hệ thống Chatbot Văn bản (Text Agent)                         | Tác tử Thoại Thời gian thực (Voice Agent)                         | Kiến trúc Hợp nhất Đa phương thức                                |
+| --------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Giao thức mạng chủ đạo**   | HTTP/2, REST, Server-Sent Events, WebSocket                       | WebRTC (RTP/SRTP), SIP, Telephony Media Streams                        | Đa giao thức thích ứng (WebRTC Transport + HTTP/WS Gateway)          |
+| **Cấu trúc luồng dữ liệu**   | Khối văn bản tĩnh hoặc chuỗi token văn bản rời rạc      | Dòng khung âm thanh nhị phân (Audio Frames 10-20ms)                | Khung dữ liệu định kiểu (Typed Frames: Audio, Text, Marker, Signal) |
+| **Ngân sách trễ mục tiêu**   | 1.500ms – 8.000ms (ưu tiên độ sâu suy luận)                | 400ms – 800ms (ưu tiên thời gian phản hồi âm thanh)             | Phân bổ động theo kênh đầu vào (Voice < 600ms, Chat linh hoạt)  |
+| **Cơ chế ngắt tương tác**   | Hủy tác vụ bất đồng bộ phía máy khách (AbortController) | Ngắt VAD thời gian thực, dọn sạch hàng đợi phát âm thanh     | Quản trị vòng đời ngắt tập trung qua tín hiệu điều phối FSM  |
+| **Mô hình thực thi công cụ** | JSON Schema Function Calling tiêu chuẩn đa lượt              | Ký hiệu hành động dòng (Streaming Action Markers) / RPC nhẹ     | Bộ điều hợp kép: Streaming Markers cho Voice, MCP cho Agent         |
+| **Cơ chế quản lý bộ nhớ**   | Tải toàn bộ lịch sử hội thoại vào cửa sổ ngữ cảnh     | Bộ nhớ phân tầng: Trích xuất thực thể ngầm + Cửa sổ trượt | Phân cấp 5 tầng (Working, Buffer, Episodic, Vector, Graph)            |
 
-                   
+   
 
 ## Đặc Tả Kỹ Thuật Bảy Phân Tầng Chức Năng Cốt Lõi
 
@@ -53,9 +53,9 @@ Nhằm giải quyết triệt để rủi ro ảo giác và cung cấp câu tr�
 
 Quá trình truy xuất bắt đầu bằng việc quét đồng thời hai không gian dữ liệu: không gian ngữ nghĩa dày đặc (Dense Vector) sử dụng mô hình nhúng đa ngôn ngữ trên chỉ mục FAISS, và không gian từ khóa thưa thớt (Sparse Keyword) sử dụng thuật toán BM25Okapi                                                                                        . Danh sách kết quả từ hai nguồn được chuẩn hóa và hợp nhất bằng giải thuật Xếp hạng Tương hỗ (Reciprocal Rank Fusion - RRF) theo công thức toán học:
 
-RRF_Score(d)=m∈M∑​k+rm​(d)1​
+RRF_Score(d)=m∈M∑k+rm(d)1
 
-với hằng số làm mịn k=60, trong đó rm​(d) là thứ hạng của tài liệu d trong phương pháp xếp hạng m∈{Dense,Sparse}                                                                                        . Điểm số này tiếp tục được điều chỉnh bằng hệ số khuếch đại ý định (Intent Boost=+0,25) cho các tài liệu thuộc trang chuyên môn đích, và trừ điểm phạt (Penalty=−0,08) đối với các tệp PDF quét thô nhằm ưu tiên nội dung cấu trúc cao                                                                                        .
+với hằng số làm mịn k=60, trong đó rm(d) là thứ hạng của tài liệu d trong phương pháp xếp hạng m∈{Dense,Sparse}                                                                                        . Điểm số này tiếp tục được điều chỉnh bằng hệ số khuếch đại ý định (Intent Boost=+0,25) cho các tài liệu thuộc trang chuyên môn đích, và trừ điểm phạt (Penalty=−0,08) đối với các tệp PDF quét thô nhằm ưu tiên nội dung cấu trúc cao                                                                                        .
 
 Các đoạn tài liệu nằm trong nhóm đầu sau bước RRF được đưa qua mô hình Cross-Encoder để tiến hành tái xếp hạng sâu (Reranking)                                                                                        . Cross-Encoder đánh giá trực tiếp mối tương quan đồng thời giữa câu truy vấn và văn bản mục tiêu, khắc phục sự suy giảm thông tin ngữ nghĩa vốn là nhược điểm của các kiến trúc Bi-Encoder truyền thống                                                                                        . Đồng thời, phân tầng này tích hợp mô-đun đồ thị tri thức (GraphRAG) dựa trên KùzuDB hoặc Neo4j                                                                                        . Khi phát hiện các thực thể có mối liên kết phức tạp, động cơ duyệt đồ thị sẽ trích xuất các bộ ba quan hệ (Triplets) trong bán kính hai bước nhảy quanh thực thể, cung cấp cấu trúc ngữ nghĩa liên kết chéo cho các câu hỏi đòi hỏi tư duy suy luận đa chặng                                                                                        .
 
@@ -73,7 +73,7 @@ Tầng kiểm định bảo đảm toàn bộ dữ liệu đầu vào và đầu
 
 Bộ xác thực ảo giác âm thanh (ASR Hallucination Verifier) là chốt chặn đặc thù cho Voice Agent                                                                                        . Do các mô hình STT như Whisper thường sinh ra các chuỗi văn bản ảo giác (ví dụ: các đoạn phụ đề video lặp đi lặp lại) khi nhận tín hiệu im lặng hoặc tạp âm kéo dài, hệ thống áp dụng danh sách đen các mẫu câu ảo giác kết hợp tính toán tỷ lệ từ vựng duy nhất theo công thức:
 
-Unique_Ratio=∣Tokenstotal​∣∣Tokensunique​∣​
+Unique_Ratio=∣Tokenstotal∣∣Tokensunique∣
 
 Nếu chuỗi văn bản nhận dạng có Unique_Ratio<0,40 hoặc xuất hiện hiện tượng lặp từ bốn lần liên tiếp, dữ liệu sẽ bị loại bỏ ngay lập tức                                                                                        . Để bảo vệ bộ thu âm khỏi hiện tượng vòng lặp dội âm do chính loa phát ra, hệ thống áp dụng khóa đệm an toàn sau TTS (Post-TTS Grace Guard) với khoảng thời gian khóa micro từ 0,5 đến 1,0 giây sau khi âm thanh kết thúc                                                                                        .
 
@@ -337,23 +337,23 @@ Cấu trúc cây thư mục dưới đây tích hợp đầy đủ mọi mô-đu
   * `pyproject.toml` - Quản lý cấu hình gói và các thư viện phụ thuộc
   * `README.md` - Hướng dẫn thiết lập môi trường và vận hành hệ thống
 
-| Gói thư mục / Mô-đun | Tầng kiến trúc | Vai trò kỹ thuật chính | Công nghệ / Gói triển khai |
-| --- | --- | --- | --- |
-| `src/core/` | Domain Core | Định nghĩa thực thể, kiểu dữ liệu chuẩn và các giao diện trừu tượng | Python dataclasses, ABC, Typing |
-| `src/gateway/audio/` | Tầng 1: Gateway | Triệt tiêu tiếng vọng (AEC), lọc nhiễu phổ và chuyển đổi định dạng âm thanh | SpeexDSP, WebRTC APM, RNNoise |
-| `src/gateway/vad/` | Tầng 1: Gateway | Phân đoạn âm thanh có tiếng người và nhận diện ranh giới kết thúc câu nói | Silero VAD v5 (ONNX Runtime) |
-| `src/gateway/stt/` | Tầng 1: Gateway | Nhận dạng âm thanh thành văn bản tối ưu hóa theo ngôn ngữ | Whisper.cpp CUDA, NeMo Parakeet |
-| `src/gateway/transports/` | Tầng 1: Gateway | Duy trì kết nối mạng thời gian thực hai chiều giữa thiết bị và máy chủ | LiveKit WebRTC SDK, FastAPI WebSockets |
-| `src/orchestration/` | Tầng 2: Reasoning | Quản lý máy trạng thái vòng lặp lượt nói, kế hoạch đối thoại và tự đánh giá | Transitions FSM, Asyncio Orchestration |
-| `src/memory/` | Tầng 3: Memory | Bộ nhớ phân cấp 5 tầng: Working, Buffer, Episodic, Vector, Caching | SQLite, FAISS, In-memory Pydantic |
-| `src/knowledge/` | Tầng 4: Knowledge | Truy xuất lai kết hợp Dense-Sparse qua RRF, Cross-Encoder và GraphRAG | FAISS, Rank-BM25, KùzuDB, CrossEncoder |
-| `src/tools/markers/` | Tầng 5: Tools | Bóc tách cờ lệnh hành động từ dòng token văn bản phục vụ Voice | Regex Streaming Scanner, Task Queue |
-| `src/tools/mcp/` | Tầng 5: Tools | Tương tác máy khách - máy chủ công cụ chuẩn Model Context Protocol | Model Context Protocol SDK, JSON-RPC |
-| `src/guardrails/` | Tầng 6: Guardrails | Chặn ảo giác STT, khóa đệm sau loa, kiểm tra Unicode và xác thực dữ liệu | Pydantic v2, Regex Script Filter |
-| `src/observability/` | Tầng 7: Operations | Truy vết phân tán, tính toán chi phí token và giám sát độ trôi ngữ âm | OpenTelemetry, Prometheus, Langfuse |
-| `src/serving/` | Application Shell | Phơi bày các điểm cuối API REST và điều phối luồng âm thanh WebRTC | FastAPI, Uvicorn, LiveKit Worker |
+| Gói thư mục / Mô-đun   | Tầng kiến trúc   | Vai trò kỹ thuật chính                                                                      | Công nghệ / Gói triển khai          |
+| --------------------------- | ------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `src/core/`               | Domain Core         | Định nghĩa thực thể, kiểu dữ liệu chuẩn và các giao diện trừu tượng              | Python dataclasses, ABC, Typing         |
+| `src/gateway/audio/`      | Tầng 1: Gateway    | Triệt tiêu tiếng vọng (AEC), lọc nhiễu phổ và chuyển đổi định dạng âm thanh      | SpeexDSP, WebRTC APM, RNNoise           |
+| `src/gateway/vad/`        | Tầng 1: Gateway    | Phân đoạn âm thanh có tiếng người và nhận diện ranh giới kết thúc câu nói       | Silero VAD v5 (ONNX Runtime)            |
+| `src/gateway/stt/`        | Tầng 1: Gateway    | Nhận dạng âm thanh thành văn bản tối ưu hóa theo ngôn ngữ                            | Whisper.cpp CUDA, NeMo Parakeet         |
+| `src/gateway/transports/` | Tầng 1: Gateway    | Duy trì kết nối mạng thời gian thực hai chiều giữa thiết bị và máy chủ             | LiveKit WebRTC SDK, FastAPI WebSockets  |
+| `src/orchestration/`      | Tầng 2: Reasoning  | Quản lý máy trạng thái vòng lặp lượt nói, kế hoạch đối thoại và tự đánh giá | Transitions FSM, Asyncio Orchestration  |
+| `src/memory/`             | Tầng 3: Memory     | Bộ nhớ phân cấp 5 tầng: Working, Buffer, Episodic, Vector, Caching                         | SQLite, FAISS, In-memory Pydantic       |
+| `src/knowledge/`          | Tầng 4: Knowledge  | Truy xuất lai kết hợp Dense-Sparse qua RRF, Cross-Encoder và GraphRAG                       | FAISS, Rank-BM25, KùzuDB, CrossEncoder |
+| `src/tools/markers/`      | Tầng 5: Tools      | Bóc tách cờ lệnh hành động từ dòng token văn bản phục vụ Voice                     | Regex Streaming Scanner, Task Queue     |
+| `src/tools/mcp/`          | Tầng 5: Tools      | Tương tác máy khách - máy chủ công cụ chuẩn Model Context Protocol                    | Model Context Protocol SDK, JSON-RPC    |
+| `src/guardrails/`         | Tầng 6: Guardrails | Chặn ảo giác STT, khóa đệm sau loa, kiểm tra Unicode và xác thực dữ liệu            | Pydantic v2, Regex Script Filter        |
+| `src/observability/`      | Tầng 7: Operations | Truy vết phân tán, tính toán chi phí token và giám sát độ trôi ngữ âm             | OpenTelemetry, Prometheus, Langfuse     |
+| `src/serving/`            | Application Shell   | Phơi bày các điểm cuối API REST và điều phối luồng âm thanh WebRTC                  | FastAPI, Uvicorn, LiveKit Worker        |
 
-                   
+   
 
 ## Cơ Chế Điều Phối Đột Phá Và Động Lực Học Luồng Dữ Liệu Thời Gian Thực
 
@@ -363,16 +363,16 @@ Hiệu năng thực tế của một hệ thống hội thoại phụ thuộc v�
 
 Nếu câu thoại yêu cầu truy vấn tri thức nghiệp vụ, `HybridFusionRetriever` quét đồng thời trên chỉ mục vector FAISS và chỉ mục từ khóa BM25, hợp nhất kết quả bằng thuật toán RRF trong vòng 80ms, tiếp nối bởi mô hình `CrossEncoder` chấm điểm lại top 5 tài liệu trong vòng 50ms                                                                                        . `ContextBuilder` tiến hành ghép nối khối System Prompt cố định đã được lưu đệm sẵn cùng dữ liệu tài liệu và gửi yêu cầu sinh phản hồi dạng dòng tới LLM                                                                                        . Ngay khi LLM sinh ra những token đầu tiên và `SentenceSplitter` phát hiện ranh giới câu hợp lý (dấu phẩy, dấu chấm), đoạn văn bản ngắn này lập tức được gửi sang `BaseTTSService` để tổng hợp thành âm thanh                                                                                        . Gói âm thanh đầu tiên được truyền ngược về loa người dùng qua WebRTC trong khi mô hình ngôn ngữ vẫn đang tiếp tục sinh phần nội dung tiếp theo                                                                                        .
 
-| Giai đoạn xử lý trong đường dẫn | Ngân sách trễ tối đa (Target Budget) | Kỹ thuật tối ưu hóa then chốt |
-| --- | --- | --- |
-| **Thu nhận âm thanh & Tiền xử lý DSP** | 30ms – 50ms | Xử lý khung trượt 10-20ms trên bộ nhớ đệm chia sẻ C++ |
-| **Nhận diện giọng nói (VAD & STT)** | 120ms – 200ms | Silero VAD lượng tử hóa ONNX, Whisper.cpp chạy CUDA bán chính xác |
-| **Định tuyến & Truy xuất lai RAG** | 80ms – 150ms | Quét FAISS trong bộ nhớ RAM, phân hạng song song qua BM25 và RRF |
-| **LLM Time-to-First-Token (TTFT)** | 100ms – 200ms | Sử dụng Prompt Caching tiền tố, tối ưu hóa kích thước cửa sổ ngữ cảnh |
-| **Phân tách câu & Khởi tạo âm thanh TTS** | 80ms – 120ms | Cắt câu linh hoạt, dịch chuyển dòng token trực tiếp sang động cơ TTS |
-| **Tổng độ trễ toàn trình (End-to-End TTFA)** | **410ms – 720ms** | **Đảm bảo hội thoại tự nhiên theo thời gian thực (< 800ms)** [cite: 6] |
+| Giai đoạn xử lý trong đường dẫn                  | Ngân sách trễ tối đa (Target Budget) | Kỹ thuật tối ưu hóa then chốt                                                   |
+| -------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Thu nhận âm thanh & Tiền xử lý DSP**        | 30ms – 50ms                              | Xử lý khung trượt 10-20ms trên bộ nhớ đệm chia sẻ C++                       |
+| **Nhận diện giọng nói (VAD & STT)**            | 120ms – 200ms                            | Silero VAD lượng tử hóa ONNX, Whisper.cpp chạy CUDA bán chính xác             |
+| **Định tuyến & Truy xuất lai RAG**             | 80ms – 150ms                             | Quét FAISS trong bộ nhớ RAM, phân hạng song song qua BM25 và RRF                |
+| **LLM Time-to-First-Token (TTFT)**                 | 100ms – 200ms                            | Sử dụng Prompt Caching tiền tố, tối ưu hóa kích thước cửa sổ ngữ cảnh   |
+| **Phân tách câu & Khởi tạo âm thanh TTS**    | 80ms – 120ms                             | Cắt câu linh hoạt, dịch chuyển dòng token trực tiếp sang động cơ TTS       |
+| **Tổng độ trễ toàn trình (End-to-End TTFA)** | **410ms – 720ms**                  | **Đảm bảo hội thoại tự nhiên theo thời gian thực (< 800ms)** [cite: 6] |
 
-                   
+   
 
 Song song với quá trình người dùng lắng nghe máy đọc (thường kéo dài từ 2 đến 6 giây), hệ thống kích hoạt đường dẫn xử lý ngầm hoàn toàn bất đồng bộ                                                                                        . Cặp thông điệp hỏi - đáp vừa phát sinh được đưa vào `SlidingWindowBuffer`                                                                                        . Đồng thời, tiến trình `AsyncEntityExtractor` sử dụng một mô hình ngôn ngữ nhỏ chạy ngầm để bóc tách các dữ liệu nhân thân (họ tên, thời gian cuộc hẹn, dịch vụ quan tâm) và cập nhật trực tiếp vào đối tượng `SessionStateMemory`                                                                                        . Toàn bộ dữ liệu trích xuất được xác thực bởi `PydanticSchemaValidator` trước khi ghi lưu vào cơ sở dữ liệu `conversations.db`                                                                                        . Do việc trích xuất và cập nhật này diễn ra trong lúc tai người nghe đang bận tiếp nhận âm thanh, thời gian trễ của bước xử lý tri thức chuyên sâu này hoàn toàn vô hình đối với người dùng                                                                                        .
 
@@ -382,46 +382,46 @@ Trong trường hợp người dùng chủ động cất lời ngắt quãng (Ba
 
 Bảng ma trận kỹ thuật dưới đây tổng hợp mối liên kết trực tiếp giữa các thành phần kiến trúc lý thuyết, tệp mã nguồn tương ứng trong dự án và các thư viện hạ tầng được chỉ định thực thi:
 
-| Phân tầng lý thuyết | Thành phần chức năng | Vị trí tệp tin trong cấu trúc dự án | Lớp / Hàm xử lý chính | Thư viện & Công nghệ lựa chọn |
-| --- | --- | --- | --- | --- |
-| **1. Gateway** | Giao vận WebRTC thời gian thực | `src/gateway/transports/webrtc_transport.py` | `WebRTCTransport` | LiveKit Agents RTC / FastRTC / aiortc |
-|  | Triệt tiêu tiếng vọng âm học (AEC) | `src/gateway/audio/aec.py` | `AcousticEchoCanceller` | WebRTC AudioProcessingModule (APM) |
-|  | Lọc nhiễu âm thanh học sâu | `src/gateway/audio/noise_filter.py` | `NeuralNoiseFilter` | RNNoise / DeepFilterNet3 |
-|  | Phân đoạn kích hoạt tiếng người | `src/gateway/vad/silero_vad.py` | `SileroVADDetector` | Silero VAD v5 (ONNX Runtime Execution) |
-|  | Nhận diện giọng nói STT đa ngữ | `src/gateway/stt/whisper_cpp_adapter.py` | `WhisperCppSTT` | Whisper.cpp (CUDA C++ Bindings) |
-|  | Định tuyến ý định ngữ nghĩa sớm | `src/gateway/routing/semantic_router.py` | `SemanticRouter` | MiniLM Cosine Router + Intent Regex |
-|  | Khử thông tin định danh (PII) | `src/gateway/security/pii_anonymizer.py` | `PIIAnonymizer` | Microsoft Presidio / Regex Redaction |
-|  | Giới hạn tần suất cửa sổ trượt | `src/gateway/security/rate_limiter.py` | `SlidingWindowLimiter` | In-memory Sliding Window / Redis |
-| **2. Reasoning** | Trừu tượng hóa mô hình nền tảng | `src/core/interfaces/llm.py` | `BaseLLMProvider` | OpenAI API / vLLM (Qwen/Gemma) |
-|  | Máy trạng thái tuần hoàn lượt nói | `src/orchestration/state_machine/cyclic_turn_fsm.py` | `CyclicTurnFSM` | Asyncio FSM State Controller |
-|  | Kế hoạch đối thoại hai giai đoạn | `src/orchestration/planning/dialogue_planner.py` | `TwoPhaseDialogPlanner` | 2-Phase Field Collection Dialog Pattern |
-|  | Tự đánh giá khép kín STT Loopback | `src/orchestration/reflection/loopback_evaluator.py` | `LoopbackEvaluator` | Levenshtein Distance / SequenceMatcher |
-| **3. Memory** | Ngữ cảnh làm việc cốt lõi | `src/memory/working/session_state.py` | `SessionStateMemory` | Pydantic Dataclass In-memory State |
-|  | Trích xuất thực thể phi đồng bộ | `src/memory/working/async_extractor.py` | `AsyncEntityExtractor` | Background Asyncio Task Worker |
-|  | Cửa sổ trượt bộ đệm thông điệp | `src/memory/buffer/sliding_window.py` | `SlidingWindowBuffer` | Atomic-pair Rolling Message Queue |
-|  | Lưu trữ sự kiện và lịch sử phiên | `src/memory/episodic/sqlite_store.py` | `SQLiteEpisodicStore` | SQLite3 với chỉ mục thời gian |
-|  | Chỉ mục tri thức vector vĩnh cửu | `src/memory/archival/vector_store.py` | `VectorStoreAdapter` | FAISS (IndexFlatIP) / Qdrant |
-|  | Tối ưu hóa tiền tố Prompt Cache | `src/memory/context/context_builder.py` | `ContextBuilder` | Static Prefix Caching Layout |
-| **4. Knowledge** | Hợp nhất truy xuất lai RRF | `src/knowledge/retrieval/hybrid_fusion.py` | `HybridFusionRetriever` | Reciprocal Rank Fusion (k=60) |
-|  | Tìm kiếm từ khóa truyền thống | `src/knowledge/retrieval/sparse_search.py` | `BM25Retriever` | Rank-BM25 (BM25Okapi) |
-|  | Tái xếp hạng sâu Cross-Encoder | `src/knowledge/reranking/cross_encoder.py` | `CrossEncoderReranker` | sentence-transformers CrossEncoder |
-|  | Duyệt đồ thị tri thức đa chặng | `src/knowledge/graph/graph_traversal.py` | `GraphTraversalEngine` | KùzuDB Embedded Graph Database |
-| **5. Tools** | Quét cờ hành động trực tiếp | `src/tools/markers/marker_parser.py` | `ActionMarkerParser` | Regex Streaming Token Scanner |
-|  | Máy khách Model Context Protocol | `src/tools/mcp/client.py` | `MCPClientManager` | MCP Official Python SDK (Stdio/SSE) |
-|  | Máy chủ cung cấp công cụ MCP | `src/tools/mcp/server.py` | `MCPServerEndpoint` | FastMCP Server Implementation |
-|  | Hộp cát thực thi cách ly an toàn | `src/tools/sandbox/container_runner.py` | `ContainerSandbox` | Docker SDK / Firecracker MicroVM |
-| **6. Guardrails** | Bộ lọc ảo giác nhận dạng ASR | `src/guardrails/hallucination/speech_hallucination_filter.py` | `ASRHallucinationFilter` | Vocabulary Unique Ratio Checker |
-|  | Khóa bảo vệ dội âm sau khi phát | `src/guardrails/output_filters/grace_guard.py` | `GraceGuardManager` | Lockout Timing Window (0.5s - 1.0s) |
-|  | Xác thực lược đồ dữ liệu nghiệp vụ | `src/guardrails/schemas/booking_schema.py` | `VisitorBookingSchema` | Pydantic v2 Core Validation |
-|  | Bộ lọc thứ tiếng Unicode | `src/guardrails/output_filters/language_strictness_guard.py` | `LanguageStrictnessGuard` | Unicode Script Property Analysis |
-|  | Làm sạch văn bản cho bộ đọc âm | `src/guardrails/output_filters/tts_text_cleaner.py` | `TTSTextCleaner` | Regex Markdown/URL Stripper |
-| **7. Operations** | Ghi vết độ trễ phân đoạn vòng | `src/observability/tracing/pipeline_tracer.py` | `PipelineTracer` | Thread-safe Circular Ring Buffer |
-|  | Xuất vết chuẩn OpenTelemetry | `src/observability/tracing/otel_instrumentation.py` | `OTelManager` | OpenTelemetry Tracing SDK |
-|  | Theo dõi chi phí và số lượng token | `src/observability/metrics/cost_tracker.py` | `TokenCostAccounting` | Pricing Matrix Token Accounting |
-|  | Giám sát độ trôi nhận dạng âm vị | `src/observability/monitoring/phonetic_drift_detector.py` | `PhoneticDriftDetector` | SQLite Audit Logs Aggregator |
-|  | Kịch bản mô phỏng kiểm thử hai bot | `tests/e2e/test_voice_turn_loop.py` | `VoiceAgentSimulationSuite` | Pytest Audio Mock Environment |
+| Phân tầng lý thuyết | Thành phần chức năng                     | Vị trí tệp tin trong cấu trúc dự án                      | Lớp / Hàm xử lý chính    | Thư viện & Công nghệ lựa chọn     |
+| ----------------------- | -------------------------------------------- | --------------------------------------------------------------- | ----------------------------- | --------------------------------------- |
+| **1. Gateway**    | Giao vận WebRTC thời gian thực            | `src/gateway/transports/webrtc_transport.py`                  | `WebRTCTransport`           | LiveKit Agents RTC / FastRTC / aiortc   |
+|                         | Triệt tiêu tiếng vọng âm học (AEC)     | `src/gateway/audio/aec.py`                                    | `AcousticEchoCanceller`     | WebRTC AudioProcessingModule (APM)      |
+|                         | Lọc nhiễu âm thanh học sâu              | `src/gateway/audio/noise_filter.py`                           | `NeuralNoiseFilter`         | RNNoise / DeepFilterNet3                |
+|                         | Phân đoạn kích hoạt tiếng người      | `src/gateway/vad/silero_vad.py`                               | `SileroVADDetector`         | Silero VAD v5 (ONNX Runtime Execution)  |
+|                         | Nhận diện giọng nói STT đa ngữ         | `src/gateway/stt/whisper_cpp_adapter.py`                      | `WhisperCppSTT`             | Whisper.cpp (CUDA C++ Bindings)         |
+|                         | Định tuyến ý định ngữ nghĩa sớm     | `src/gateway/routing/semantic_router.py`                      | `SemanticRouter`            | MiniLM Cosine Router + Intent Regex     |
+|                         | Khử thông tin định danh (PII)            | `src/gateway/security/pii_anonymizer.py`                      | `PIIAnonymizer`             | Microsoft Presidio / Regex Redaction    |
+|                         | Giới hạn tần suất cửa sổ trượt       | `src/gateway/security/rate_limiter.py`                        | `SlidingWindowLimiter`      | In-memory Sliding Window / Redis        |
+| **2. Reasoning**  | Trừu tượng hóa mô hình nền tảng      | `src/core/interfaces/llm.py`                                  | `BaseLLMProvider`           | OpenAI API / vLLM (Qwen/Gemma)          |
+|                         | Máy trạng thái tuần hoàn lượt nói    | `src/orchestration/state_machine/cyclic_turn_fsm.py`          | `CyclicTurnFSM`             | Asyncio FSM State Controller            |
+|                         | Kế hoạch đối thoại hai giai đoạn      | `src/orchestration/planning/dialogue_planner.py`              | `TwoPhaseDialogPlanner`     | 2-Phase Field Collection Dialog Pattern |
+|                         | Tự đánh giá khép kín STT Loopback      | `src/orchestration/reflection/loopback_evaluator.py`          | `LoopbackEvaluator`         | Levenshtein Distance / SequenceMatcher  |
+| **3. Memory**     | Ngữ cảnh làm việc cốt lõi              | `src/memory/working/session_state.py`                         | `SessionStateMemory`        | Pydantic Dataclass In-memory State      |
+|                         | Trích xuất thực thể phi đồng bộ       | `src/memory/working/async_extractor.py`                       | `AsyncEntityExtractor`      | Background Asyncio Task Worker          |
+|                         | Cửa sổ trượt bộ đệm thông điệp     | `src/memory/buffer/sliding_window.py`                         | `SlidingWindowBuffer`       | Atomic-pair Rolling Message Queue       |
+|                         | Lưu trữ sự kiện và lịch sử phiên     | `src/memory/episodic/sqlite_store.py`                         | `SQLiteEpisodicStore`       | SQLite3 với chỉ mục thời gian       |
+|                         | Chỉ mục tri thức vector vĩnh cửu        | `src/memory/archival/vector_store.py`                         | `VectorStoreAdapter`        | FAISS (IndexFlatIP) / Qdrant            |
+|                         | Tối ưu hóa tiền tố Prompt Cache         | `src/memory/context/context_builder.py`                       | `ContextBuilder`            | Static Prefix Caching Layout            |
+| **4. Knowledge**  | Hợp nhất truy xuất lai RRF                | `src/knowledge/retrieval/hybrid_fusion.py`                    | `HybridFusionRetriever`     | Reciprocal Rank Fusion (k=60)           |
+|                         | Tìm kiếm từ khóa truyền thống          | `src/knowledge/retrieval/sparse_search.py`                    | `BM25Retriever`             | Rank-BM25 (BM25Okapi)                   |
+|                         | Tái xếp hạng sâu Cross-Encoder           | `src/knowledge/reranking/cross_encoder.py`                    | `CrossEncoderReranker`      | sentence-transformers CrossEncoder      |
+|                         | Duyệt đồ thị tri thức đa chặng        | `src/knowledge/graph/graph_traversal.py`                      | `GraphTraversalEngine`      | KùzuDB Embedded Graph Database         |
+| **5. Tools**      | Quét cờ hành động trực tiếp           | `src/tools/markers/marker_parser.py`                          | `ActionMarkerParser`        | Regex Streaming Token Scanner           |
+|                         | Máy khách Model Context Protocol           | `src/tools/mcp/client.py`                                     | `MCPClientManager`          | MCP Official Python SDK (Stdio/SSE)     |
+|                         | Máy chủ cung cấp công cụ MCP            | `src/tools/mcp/server.py`                                     | `MCPServerEndpoint`         | FastMCP Server Implementation           |
+|                         | Hộp cát thực thi cách ly an toàn        | `src/tools/sandbox/container_runner.py`                       | `ContainerSandbox`          | Docker SDK / Firecracker MicroVM        |
+| **6. Guardrails** | Bộ lọc ảo giác nhận dạng ASR           | `src/guardrails/hallucination/speech_hallucination_filter.py` | `ASRHallucinationFilter`    | Vocabulary Unique Ratio Checker         |
+|                         | Khóa bảo vệ dội âm sau khi phát        | `src/guardrails/output_filters/grace_guard.py`                | `GraceGuardManager`         | Lockout Timing Window (0.5s - 1.0s)     |
+|                         | Xác thực lược đồ dữ liệu nghiệp vụ | `src/guardrails/schemas/booking_schema.py`                    | `VisitorBookingSchema`      | Pydantic v2 Core Validation             |
+|                         | Bộ lọc thứ tiếng Unicode                 | `src/guardrails/output_filters/language_strictness_guard.py`  | `LanguageStrictnessGuard`   | Unicode Script Property Analysis        |
+|                         | Làm sạch văn bản cho bộ đọc âm       | `src/guardrails/output_filters/tts_text_cleaner.py`           | `TTSTextCleaner`            | Regex Markdown/URL Stripper             |
+| **7. Operations** | Ghi vết độ trễ phân đoạn vòng        | `src/observability/tracing/pipeline_tracer.py`                | `PipelineTracer`            | Thread-safe Circular Ring Buffer        |
+|                         | Xuất vết chuẩn OpenTelemetry              | `src/observability/tracing/otel_instrumentation.py`           | `OTelManager`               | OpenTelemetry Tracing SDK               |
+|                         | Theo dõi chi phí và số lượng token     | `src/observability/metrics/cost_tracker.py`                   | `TokenCostAccounting`       | Pricing Matrix Token Accounting         |
+|                         | Giám sát độ trôi nhận dạng âm vị    | `src/observability/monitoring/phonetic_drift_detector.py`     | `PhoneticDriftDetector`     | SQLite Audit Logs Aggregator            |
+|                         | Kịch bản mô phỏng kiểm thử hai bot     | `tests/e2e/test_voice_turn_loop.py`                           | `VoiceAgentSimulationSuite` | Pytest Audio Mock Environment           |
 
-                   
+   
 
 Kiến trúc hợp nhất này cung cấp một nền tảng vững chắc để chuyển giao các giải pháp trí tuệ nhân tạo từ giai đoạn thử nghiệm sang vận hành thực tế ở quy mô lớn                                                                                        . Bằng việc cô lập hoàn toàn các ràng buộc kỹ thuật của kênh truyền âm thanh (WebRTC, DSP, VAD) vào tầng Gateway, logic nghiệp vụ của hệ thống được bảo toàn tính toàn vẹn và có thể tái sử dụng tối đa cho cả hai hình thái Chatbot văn bản và Voice Agent tương tác trực tiếp                                                                                        .
 
