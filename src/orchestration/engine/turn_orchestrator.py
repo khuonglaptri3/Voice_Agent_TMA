@@ -103,6 +103,9 @@ class ADKLiveOrchestrator:
 
         config = types.LiveConnectConfig(
             response_modalities=[types.Modality.AUDIO],
+            thinking_config=types.ThinkingConfig(
+                thinking_level=types.ThinkingLevel.LOW
+            ),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
@@ -117,6 +120,11 @@ class ADKLiveOrchestrator:
 
         async with client.aio.live.connect(model=self.model, config=config) as session:
             logger.info("Connected to Gemini Live session successfully.")
+            await self._safe_dispatch(
+                event_out_callback,
+                "session_ready",
+                {"type": "session_ready", "status": "connected"},
+            )
 
             async def send_audio_worker():
                 """Continuously read audio frames from queue and stream to Gemini."""
