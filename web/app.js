@@ -13,6 +13,7 @@ let sourceNode = null;
 let socketConnection = null;
 let isConnected = false;
 let isRecording = false;
+let startInProgress = false;
 
 function addLog(message) {
   const item = document.createElement("li");
@@ -26,6 +27,10 @@ function updateStatus(label, connected) {
 }
 
 function connectSocket() {
+  if (socketConnection && (socketConnection.readyState === WebSocket.OPEN || socketConnection.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const url = `${protocol}://${window.location.host}/ws/live`;
 
@@ -62,16 +67,28 @@ function connectSocket() {
 }
 
 async function startCall() {
+  if (startInProgress) {
+    return;
+  }
+
   if (isRecording) {
     stopCall();
     return;
   }
 
-  if (!isConnected) {
-    connectSocket();
-  }
+  startInProgress = true;
+  toggleButton.disabled = true;
+  toggleButton.textContent = "Starting...";
 
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("This browser does not support microphone access.");
+    }
+
+    if (!isConnected) {
+      connectSocket();
+    }
+
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -88,8 +105,6 @@ async function startCall() {
     if (audioContext.state === "suspended") {
       await audioContext.resume();
     }
-
-    sampleRateEl.textContent = `${TARGET_SAMPLE_RATE} Hz target`;
 
     await audioContext.audioWorklet.addModule("./audio_worklet.js");
 
@@ -108,6 +123,7 @@ async function startCall() {
 
     isRecording = true;
     toggleButton.textContent = "Stop call";
+    toggleButton.disabled = false;
     sampleRateEl.textContent = `${audioContext.sampleRate} Hz`;
     addLog(`Microphone started at ${audioContext.sampleRate} Hz. Streaming PCM chunks to /ws/live`);
 
@@ -136,6 +152,12 @@ async function startCall() {
     addLog(`Failed to start microphone: ${error.message}`);
     console.error(error);
     stopCall();
+  } finally {
+    startInProgress = false;
+    toggleButton.disabled = false;
+    if (!isRecording) {
+      toggleButton.textContent = "Start call";
+    }
   }
 }
 

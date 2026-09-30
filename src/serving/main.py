@@ -5,6 +5,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.gateway.transports.websocket_transport import WebSocketTransport
@@ -16,6 +17,11 @@ STATIC_DIR = BASE_DIR / "web"
 app = FastAPI(title="Enterprise Agentic AI & Realtime Voice Agent")
 app.include_router(chat_router, prefix="/api/v1")
 app.mount("/web", StaticFiles(directory=str(STATIC_DIR), html=True), name="web")
+
+
+@app.get("/")
+def root_redirect():
+    return RedirectResponse(url="/web")
 
 
 @app.get("/health")
