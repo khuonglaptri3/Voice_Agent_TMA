@@ -58,53 +58,7 @@ let animationFrameId = null;
 let socketConnection = null;
 let isConnected = false;
 let isRecording = false;
-let isMuted = false;
-let isPlaybackEnabled = false;
-
-let callTimerInterval = null;
-let callStartTime = null;
-let totalPacketsReceived = 0;
-let currentFilter = "all";
-let peakMeterValue = 0;
-let totalLogEvents = 0;
-
-// Audio Output Playback Context (for server echo playback if enabled)
-let outputAudioContext = null;
-let nextPlayTime = 0;
-
-/**
- * Toast Notification Utility
- */
-function showToast(message, duration = 2500) {
-  if (!toast) return;
-  toast.textContent = message;
-  toast.classList.remove("hidden");
-  clearTimeout(toast._timeout);
-  toast._timeout = setTimeout(() => {
-    toast.classList.add("hidden");
-  }, duration);
-}
-
-/**
- * Format timestamp for logging
- */
-function getTimestamp() {
-  const now = new Date();
-  const h = String(now.getHours()).padStart(2, "0");
-  const m = String(now.getMinutes()).padStart(2, "0");
-  const s = String(now.getSeconds()).padStart(2, "0");
-  const ms = String(now.getMilliseconds()).padStart(3, "0");
-  return `${h}:${m}:${s}.${ms}`;
-}
-
-/**
- * Add an event to the session log
- */
-function addLog(message, category = "system") {
-  totalLogEvents += 1;
-  if (logCountBadge) {
-    logCountBadge.textContent = `${totalLogEvents} events`;
-  }
+let startInProgress = false;
 
   const item = document.createElement("li");
   item.className = `log-item ${category}`;
@@ -190,6 +144,10 @@ function playServerPcmFrame(arrayBuffer) {
  * WebSocket Connection Management
  */
 function connectSocket() {
+  if (socketConnection && (socketConnection.readyState === WebSocket.OPEN || socketConnection.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
   const url = `${protocol}://${window.location.host}/ws/live`;
 
@@ -400,16 +358,28 @@ function stopCallTimer() {
  * Start Call & Microphone AudioWorklet Streaming
  */
 async function startCall() {
+  if (startInProgress) {
+    return;
+  }
+
   if (isRecording) {
     stopCall();
     return;
   }
 
-  if (!isConnected) {
-    connectSocket();
-  }
+  startInProgress = true;
+  toggleButton.disabled = true;
+  toggleButton.textContent = "Starting...";
 
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("This browser does not support microphone access.");
+    }
+
+    if (!isConnected) {
+      connectSocket();
+    }
+
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -427,11 +397,6 @@ async function startCall() {
 
     if (audioContext.state === "suspended") {
       await audioContext.resume();
-    }
-
-    sampleRateEl.textContent = `${TARGET_SAMPLE_RATE} Hz`;
-    if (sampleRateSub) {
-      sampleRateSub.textContent = `Native: ${audioContext.sampleRate} Hz (Resampled)`;
     }
 
     await audioContext.audioWorklet.addModule("./audio_worklet.js");
@@ -454,7 +419,10 @@ async function startCall() {
     sourceNode.connect(analyserNode);
 
     isRecording = true;
-    isMuted = false;
+    toggleButton.textContent = "Stop call";
+    toggleButton.disabled = false;
+    sampleRateEl.textContent = `${audioContext.sampleRate} Hz`;
+    addLog(`Microphone started at ${audioContext.sampleRate} Hz. Streaming PCM chunks to /ws/live`);
 
     // Update UI Elements
     toggleButton.classList.add("active-call");
@@ -484,6 +452,12 @@ async function startCall() {
     console.error(error);
     showToast(`Microphone error: ${error.message}`);
     stopCall();
+  } finally {
+    startInProgress = false;
+    toggleButton.disabled = false;
+    if (!isRecording) {
+      toggleButton.textContent = "Start call";
+    }
   }
 }
 
