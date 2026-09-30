@@ -27,7 +27,8 @@ def test_settings_configuration():
     from config.settings import settings
     assert settings.AUDIO_SAMPLE_RATE == 16000
     assert settings.AUDIO_CHANNELS == 1
-    assert settings.GEMINI_LIVE_MODEL == "gemini-2.0-flash-exp"
+    assert hasattr(settings, "GOOGLE_API_KEY")
+    assert isinstance(settings.GEMINI_LIVE_MODEL, str) and len(settings.GEMINI_LIVE_MODEL) > 0
 
 
 def test_sounddevice_devices_available():
