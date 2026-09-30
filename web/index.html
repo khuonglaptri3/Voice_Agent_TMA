@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice Agent Dev B Day 1</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Dev B • Morning Day 1</p>
+          <h1>Live Audio Echo Test</h1>
+        </div>
+        <button id="toggle-call" class="primary-btn">Start call</button>
+      </header>
+
+      <section class="status-panel">
+        <div>
+          <span class="status-label">Connection</span>
+          <strong id="status">Disconnected</strong>
+        </div>
+        <div>
+          <span class="status-label">Sample rate</span>
+          <strong id="sample-rate">--</strong>
+        </div>
+        <div>
+          <span class="status-label">Last packet</span>
+          <strong id="last-packet">0 bytes</strong>
+        </div>
+      </section>
+
+      <section class="meter-card">
+        <label for="mic-meter">Mic input level</label>
+        <meter id="mic-meter" min="0" max="100" value="0"></meter>
+      </section>
+
+      <section class="log-card">
+        <h2>Session log</h2>
+        <ul id="event-log">
+          <li>Ready to connect.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
