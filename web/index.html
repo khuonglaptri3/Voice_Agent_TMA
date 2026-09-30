@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TMA Voice Agent — Speech-to-Speech Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <!-- Accessibility Skip Link -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="app-layout">
+      <!-- Top Navigation & System Bar -->
+      <header class="studio-header">
+        <div class="brand-group">
+          <div class="brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" x2="12" y1="19" y2="22"/>
+            </svg>
+          </div>
+          <div>
+            <div class="brand-eyebrow">Enterprise Voice Agent • S2S PoC</div>
+            <h1 class="brand-title">Duplex Audio Studio</h1>
+          </div>
+        </div>
+
+        <div class="header-meta">
+          <div id="call-timer-badge" class="timer-badge" aria-label="Call duration" hidden>
+            <span class="timer-dot"></span>
+            <span id="call-timer">00:00</span>
+          </div>
+
+          <div class="connection-status-pill" id="conn-pill">
+            <span class="status-indicator-dot" id="status-dot"></span>
+            <span class="status-meta-label">Transport:</span>
+            <strong id="status">Disconnected</strong>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Studio Content -->
+      <main id="main-content" class="studio-body">
+        
+        <!-- Hero Visualizer Section -->
+        <section class="visualizer-hero-card" aria-label="Real-time Audio Visualizer">
+          <div class="hero-top">
+            <div class="visualizer-mode-tag">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+              </svg>
+              <span>Live PCM 16kHz Spectrum</span>
+            </div>
+            <div class="engine-tag" id="dsp-badge">DSP Worklet Active</div>
+          </div>
+
+          <!-- Canvas Audio Visualizer -->
+          <div class="canvas-container">
+            <canvas id="visualizer-canvas" height="150" aria-label="Live audio waveform display"></canvas>
+            <div id="visualizer-placeholder" class="visualizer-overlay-msg">
+              <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" fill="none" stroke-width="1.5" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 12h8"/>
+              </svg>
+              <span>Microphone idle. Click "Start call" to begin live audio streaming.</span>
+            </div>
+          </div>
+
+          <!-- Audio Meter Level Indicator -->
+          <div class="meter-panel">
+            <div class="meter-info">
+              <label for="mic-meter" class="meter-label">
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                </svg>
+                <span>Input Gain Level</span>
+              </label>
+              <span class="meter-val-text" id="meter-numeric">-&#8734; dB</span>
+            </div>
+            
+            <div class="custom-meter-track" aria-hidden="true">
+              <div class="custom-meter-fill" id="custom-meter-bar"></div>
+              <div class="custom-meter-peak" id="custom-meter-peak"></div>
+            </div>
+
+            <!-- Standard meter preserved for DOM compatibility -->
+            <meter id="mic-meter" min="0" max="100" value="0" class="sr-only" aria-label="Microphone input level"></meter>
+          </div>
+        </section>
+
+        <!-- Control Action Bar -->
+        <section class="control-action-bar" aria-label="Audio Controls">
+          <div class="primary-action-wrap">
+            <button id="toggle-call" class="primary-btn call-action-btn" aria-label="Start audio call">
+              <svg id="call-icon-start" class="btn-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+              </svg>
+              <svg id="call-icon-stop" class="btn-icon hidden" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="1" y1="1" x2="23" y2="23"/>
+                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+              <span id="call-btn-text">Start call</span>
+            </button>
+          </div>
+
+          <div class="secondary-actions">
+            <!-- Mute Toggle -->
+            <button id="mute-btn" class="secondary-btn" aria-label="Mute microphone" disabled>
+              <svg id="mic-unmuted-icon" class="btn-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+              <svg id="mic-muted-icon" class="btn-icon hidden" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <line x1="1" y1="1" x2="23" y2="23"/>
+                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/>
+                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                <line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
+              <span id="mute-btn-text">Mute Mic</span>
+            </button>
+
+            <!-- Agent Audio Playback Toggle -->
+            <button id="playback-btn" class="secondary-btn" aria-label="Toggle agent audio playback">
+              <svg id="speaker-on-icon" class="btn-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              </svg>
+              <svg id="speaker-off-icon" class="btn-icon hidden" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                <line x1="23" y1="9" x2="17" y2="15"/>
+                <line x1="17" y1="9" x2="23" y2="15"/>
+              </svg>
+              <span id="playback-btn-text">Agent Audio: Off</span>
+            </button>
+
+            <!-- Reconnect Socket -->
+            <button id="reconnect-btn" class="secondary-btn icon-only" title="Reconnect WebSocket" aria-label="Reconnect WebSocket">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                <path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                <path d="M3 21v-5h5"/>
+              </svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- Telemetry HUD Grid -->
+        <section class="telemetry-grid" aria-label="System Telemetry & Diagnostics">
+          <!-- Card 1: Sample Rate -->
+          <div class="telemetry-card">
+            <div class="telemetry-header">
+              <span class="telemetry-label">Sample Rate</span>
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <rect width="18" height="18" x="3" y="3" rx="2"/>
+                <path d="M7 12h2l2 4 2-8 2 4h2"/>
+              </svg>
+            </div>
+            <div class="telemetry-value-wrap">
+              <strong id="sample-rate" class="telemetry-value">--</strong>
+              <span class="telemetry-sub" id="sample-rate-sub">Target: 16000 Hz</span>
+            </div>
+          </div>
+
+          <!-- Card 2: Last Packet -->
+          <div class="telemetry-card">
+            <div class="telemetry-header">
+              <span class="telemetry-label">Last Packet Size</span>
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <polyline points="16 16 12 12 8 16"/>
+                <line x1="12" y1="12" x2="12" y2="21"/>
+                <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+              </svg>
+            </div>
+            <div class="telemetry-value-wrap">
+              <strong id="last-packet" class="telemetry-value">0 bytes</strong>
+              <span class="telemetry-sub" id="packet-counter-sub">Packets: 0 total</span>
+            </div>
+          </div>
+
+          <!-- Card 3: Audio Format -->
+          <div class="telemetry-card">
+            <div class="telemetry-header">
+              <span class="telemetry-label">Audio Framing</span>
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <path d="M2 10v3"/>
+                <path d="M6 6v11"/>
+                <path d="M10 3v18"/>
+                <path d="M14 8v7"/>
+                <path d="M18 5v13"/>
+                <path d="M22 10v3"/>
+              </svg>
+            </div>
+            <div class="telemetry-value-wrap">
+              <strong class="telemetry-value">PCM 16-Bit</strong>
+              <span class="telemetry-sub">512 samples • 32ms/chunk</span>
+            </div>
+          </div>
+
+          <!-- Card 4: Channel & Language -->
+          <div class="telemetry-card">
+            <div class="telemetry-header">
+              <span class="telemetry-label">Channel Profile</span>
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </div>
+            <div class="telemetry-value-wrap">
+              <strong class="telemetry-value">vi-VN / Mono</strong>
+              <span class="telemetry-sub">AEC • Noise Suppression ON</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Session Event Log Section -->
+        <section class="log-card" aria-label="Session Log">
+          <div class="log-card-header">
+            <div class="log-heading-group">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <polyline points="4 17 10 11 4 5"/>
+                <line x1="12" y1="19" x2="20" y2="19"/>
+              </svg>
+              <h2>Session Event Log</h2>
+              <span id="log-count-badge" class="badge">0 events</span>
+            </div>
+
+            <div class="log-controls">
+              <!-- Filter Tabs -->
+              <div class="log-filters" role="tablist" aria-label="Log filters">
+                <button class="filter-btn active" data-filter="all" role="tab" aria-selected="true">All</button>
+                <button class="filter-btn" data-filter="audio" role="tab" aria-selected="false">Audio</button>
+                <button class="filter-btn" data-filter="system" role="tab" aria-selected="false">System</button>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="log-action-btns">
+                <button id="copy-log-btn" class="icon-text-btn" title="Copy log to clipboard" aria-label="Copy log">
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                  </svg>
+                  <span>Copy</span>
+                </button>
+                <button id="clear-log-btn" class="icon-text-btn" title="Clear log entries" aria-label="Clear log">
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                    <path d="M3 6h18"/>
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                  </svg>
+                  <span>Clear</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="log-body-scroll">
+            <ul id="event-log" role="log" aria-live="polite">
+              <li class="log-item system">
+                <span class="log-time">[Init]</span>
+                <span class="log-text">Studio ready. Connects to /ws/live for full-duplex PCM streaming.</span>
+              </li>
+            </ul>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- Minimalist Studio Footer -->
+      <footer class="studio-footer">
+        <p>Google ADK & Gemini Live S2S Architecture • AudioWorklet DSP Resampler • Full-Duplex 16kHz PCM</p>
+      </footer>
+    </div>
+
+    <!-- Notification Toast for feedback -->
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
