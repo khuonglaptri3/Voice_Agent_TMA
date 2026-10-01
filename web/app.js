@@ -55,13 +55,15 @@ let workletNode = null;
 let sourceNode = null;
 let analyserNode = null;
 let animationFrameId = null;
+let audioQueue = [];
+let isDrainingAudioQueue = false;
 
 let socketConnection = null;
 let isConnected = false;
 let isRecording = false;
 let startInProgress = false;
 let isMuted = false;
-let isPlaybackEnabled = false;
+let isPlaybackEnabled = true;
 let isSessionActive = false;
 let sessionAckResolver = null;
 let sessionAckRejecter = null;
@@ -77,6 +79,9 @@ let totalLogEvents = 0;
 let outputAudioContext = null;
 let nextPlayTime = 0;
 const playbackSources = new Set();
+
+let currentTurnRole = null;
+let currentTranscriptEl = null;
 
 /**
  * Toast Notification Utility
@@ -151,46 +156,120 @@ function updateStatus(label, connected) {
 }
 
 /**
+ * Escape transcript text so it remains safe in the UI.
+ */
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function handleLiveTranscript(role, text, isFinal = false) {
+  const transcriptList = document.getElementById("transcript-list");
+  if (!transcriptList || !text) return;
+
+  // Start a new transcript bubble if speaker changes or no active bubble
+  if (currentTurnRole !== role || !currentTranscriptEl) {
+    currentTurnRole = role;
+
+    const item = document.createElement("li");
+    item.className = `transcript-message ${role === "user" ? "user" : "agent"}`;
+
+    const speaker = document.createElement("span");
+    speaker.className = "transcript-role";
+    speaker.textContent = role === "user" ? "You" : "Agent";
+
+    const message = document.createElement("span");
+    message.className = "transcript-text";
+    message.textContent = text;
+
+    item.appendChild(speaker);
+    item.appendChild(message);
+    transcriptList.appendChild(item);
+    currentTranscriptEl = message;
+  } else {
+    // Append streaming text or update final text for the active speaker bubble
+    if (role === "user" && isFinal) {
+      currentTranscriptEl.textContent = text;
+    } else {
+      currentTranscriptEl.textContent += text;
+    }
+  }
+
+  // Smooth scroll to latest subtitle
+  transcriptList.scrollTop = transcriptList.scrollHeight;
+
+  while (transcriptList.children.length > 30) {
+    transcriptList.removeChild(transcriptList.firstChild);
+  }
+
+  if (isFinal) {
+    currentTurnRole = null;
+    currentTranscriptEl = null;
+  }
+}
+
+function finishCurrentTurn() {
+  currentTurnRole = null;
+  currentTranscriptEl = null;
+}
+
+/**
  * Play received PCM Int16 frame back to speaker (when playback enabled)
  */
 function playServerPcmFrame(arrayBuffer) {
   if (!isPlaybackEnabled) return;
 
+  audioQueue.push(arrayBuffer);
+  if (isDrainingAudioQueue) return;
+
+  isDrainingAudioQueue = true;
+
   try {
-    if (!outputAudioContext) {
-      outputAudioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: OUTPUT_SAMPLE_RATE,
-      });
+    while (audioQueue.length > 0) {
+      const currentChunk = audioQueue.shift();
+      if (!outputAudioContext) {
+        outputAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: OUTPUT_SAMPLE_RATE,
+        });
+      }
+
+      if (outputAudioContext.state === "suspended") {
+        outputAudioContext.resume();
+      }
+
+      const int16 = new Int16Array(currentChunk);
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768.0;
+      }
+
+      const audioBuffer = outputAudioContext.createBuffer(1, float32.length, OUTPUT_SAMPLE_RATE);
+      audioBuffer.copyToChannel(float32, 0);
+
+      const source = outputAudioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(outputAudioContext.destination);
+      playbackSources.add(source);
+      source.onended = () => {
+        playbackSources.delete(source);
+      };
+
+      const now = outputAudioContext.currentTime;
+      if (nextPlayTime < now) {
+        nextPlayTime = now + 0.02;
+      }
+
+      source.start(nextPlayTime);
+      nextPlayTime += audioBuffer.duration;
     }
-
-    if (outputAudioContext.state === "suspended") {
-      outputAudioContext.resume();
-    }
-
-    const int16 = new Int16Array(arrayBuffer);
-    const float32 = new Float32Array(int16.length);
-    for (let i = 0; i < int16.length; i++) {
-      float32[i] = int16[i] / 32768.0;
-    }
-
-    const audioBuffer = outputAudioContext.createBuffer(1, float32.length, OUTPUT_SAMPLE_RATE);
-    audioBuffer.copyToChannel(float32, 0);
-
-    const source = outputAudioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(outputAudioContext.destination);
-    playbackSources.add(source);
-    source.onended = () => playbackSources.delete(source);
-
-    const now = outputAudioContext.currentTime;
-    if (nextPlayTime < now) {
-      nextPlayTime = now + 0.02; // Small 20ms jitter buffer
-    }
-
-    source.start(nextPlayTime);
-    nextPlayTime += audioBuffer.duration;
   } catch (err) {
     console.error("Audio playback error:", err);
+  } finally {
+    isDrainingAudioQueue = false;
   }
 }
 
@@ -256,8 +335,14 @@ function connectSocket() {
           sessionAckRejecter = null;
         }
       } else if (payload.type === "transcript") {
+        handleLiveTranscript(payload.role || "agent", payload.text || "", payload.is_final);
         addLog(`${payload.role === "user" ? "You" : "Agent"}: ${payload.text}`, "server");
+      } else if (payload.type === "turn_complete") {
+        finishCurrentTurn();
+        addLog("Turn complete.", "system");
       } else if (payload.type === "interrupted") {
+        audioQueue = [];
+        finishCurrentTurn();
         playbackSources.forEach((source) => {
           try { source.stop(); } catch {}
         });
@@ -265,6 +350,8 @@ function connectSocket() {
         nextPlayTime = outputAudioContext ? outputAudioContext.currentTime : 0;
         addLog("Agent audio interrupted.", "system");
       } else if (payload.type === "session_stop") {
+        audioQueue = [];
+        finishCurrentTurn();
         isSessionActive = false;
         addLog("Live session stopped.", "system");
       } else {
@@ -504,9 +591,6 @@ async function startCall() {
       throw new Error("This browser does not support microphone access.");
     }
 
-    await ensureSocketConnected();
-    await startLiveSession();
-
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
@@ -516,6 +600,19 @@ async function startCall() {
         sampleRate: TARGET_SAMPLE_RATE,
       },
     });
+
+    // Ensure output audio context is unlocked during user gesture
+    if (!outputAudioContext) {
+      outputAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: OUTPUT_SAMPLE_RATE,
+      });
+    }
+    if (outputAudioContext.state === "suspended") {
+      await outputAudioContext.resume();
+    }
+
+    await ensureSocketConnected();
+    await startLiveSession();
 
     const actualSampleRate = micStream.getAudioTracks()[0]?.getSettings()?.sampleRate || 48000;
     audioContext = new (window.AudioContext || window.webkitAudioContext)({
@@ -593,6 +690,8 @@ async function startCall() {
  */
 function stopCall() {
   isRecording = false;
+  audioQueue = [];
+  finishCurrentTurn();
 
   stopCallTimer();
 

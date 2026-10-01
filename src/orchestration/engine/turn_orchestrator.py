@@ -146,6 +146,8 @@ class ADKLiveOrchestrator:
                     )
                 )
             ),
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
             system_instruction=types.Content(
                 parts=[types.Part.from_text(text=self.system_instruction)]
             ),
@@ -208,7 +210,7 @@ class ADKLiveOrchestrator:
                             )
                             continue
 
-                        # 2. Handle User Transcription
+                        # 2. Handle User Transcription (Final & Interim)
                         input_transcription = getattr(server_content, "input_transcription", None)
                         if input_transcription and getattr(input_transcription, "text", None):
                             await self._safe_dispatch(
@@ -222,7 +224,34 @@ class ADKLiveOrchestrator:
                                 },
                             )
 
-                        # 3. Handle Model Turn (Audio & Agent Text)
+                        interim_transcription = getattr(server_content, "interim_input_transcription", None)
+                        if interim_transcription and getattr(interim_transcription, "text", None):
+                            await self._safe_dispatch(
+                                event_out_callback,
+                                "transcript",
+                                {
+                                    "type": "transcript",
+                                    "role": "user",
+                                    "text": interim_transcription.text,
+                                    "is_final": False,
+                                },
+                            )
+
+                        # 3. Handle Agent Output Transcription
+                        output_transcription = getattr(server_content, "output_transcription", None)
+                        if output_transcription and getattr(output_transcription, "text", None):
+                            await self._safe_dispatch(
+                                event_out_callback,
+                                "transcript",
+                                {
+                                    "type": "transcript",
+                                    "role": "agent",
+                                    "text": output_transcription.text,
+                                    "is_final": getattr(output_transcription, "finished", False) or False,
+                                },
+                            )
+
+                        # 4. Handle Model Turn (Audio & Agent Text fallback)
                         model_turn = getattr(server_content, "model_turn", None)
                         if model_turn and getattr(model_turn, "parts", None):
                             for part in model_turn.parts:
@@ -245,7 +274,7 @@ class ADKLiveOrchestrator:
                                         inline_data.data,
                                     )
 
-                        # 4. Handle Turn Complete
+                        # 5. Handle Turn Complete
                         if getattr(server_content, "turn_complete", False):
                             await self._safe_dispatch(
                                 event_out_callback,

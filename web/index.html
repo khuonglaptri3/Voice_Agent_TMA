@@ -97,6 +97,19 @@
           </div>
         </section>
 
+        <!-- Live Transcript Panel -->
+        <section class="transcript-card" aria-label="Live conversation transcript">
+          <div class="transcript-header">
+            <div class="log-heading-group">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <h2>Live Transcript</h2>
+            </div>
+          </div>
+          <ul id="transcript-list" class="transcript-list" aria-live="polite"></ul>
+        </section>
+
         <!-- Control Action Bar -->
         <section class="control-action-bar" aria-label="Audio Controls">
           <div class="primary-action-wrap">
@@ -133,7 +146,7 @@
             </button>
 
             <!-- Agent Audio Playback Toggle -->
-            <button id="playback-btn" class="secondary-btn" aria-label="Toggle agent audio playback">
+            <button id="playback-btn" class="secondary-btn active-state" aria-label="Toggle agent audio playback">
               <svg id="speaker-on-icon" class="btn-icon" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
                 <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
@@ -143,7 +156,7 @@
                 <line x1="23" y1="9" x2="17" y2="15"/>
                 <line x1="17" y1="9" x2="23" y2="15"/>
               </svg>
-              <span id="playback-btn-text">Agent Audio: Off</span>
+              <span id="playback-btn-text">Agent Audio: On</span>
             </button>
 
             <!-- Reconnect Socket -->

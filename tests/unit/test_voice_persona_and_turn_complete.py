@@ -117,3 +117,77 @@ async def test_orchestrator_handles_turn_complete_and_final_transcript():
     turn_complete_events = [e[1] for e in received_events if e[0] == "turn_complete"]
     assert len(turn_complete_events) == 1
     assert turn_complete_events[0]["type"] == "turn_complete"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_dispatches_output_transcription_stream():
+    """Verify that native Gemini output_transcription chunks are dispatched as agent transcripts."""
+    fake_session = AsyncMock()
+
+    class FakeTranscription:
+        def __init__(self, text, finished=False):
+            self.text = text
+            self.finished = finished
+
+    class FakeServerContent:
+        def __init__(self, output_transcription=None, input_transcription=None, turn_complete=False):
+            self.output_transcription = output_transcription
+            self.input_transcription = input_transcription
+            self.turn_complete = turn_complete
+            self.interrupted = False
+            self.model_turn = None
+
+    class FakeResponse:
+        def __init__(self, server_content):
+            self.server_content = server_content
+
+    responses = [
+        FakeResponse(FakeServerContent(input_transcription=FakeTranscription("Chào trợ lý", finished=True))),
+        FakeResponse(FakeServerContent(output_transcription=FakeTranscription("Dạ em chào anh,", finished=False))),
+        FakeResponse(FakeServerContent(output_transcription=FakeTranscription(" em có thể giúp gì ạ?", finished=True))),
+        FakeResponse(FakeServerContent(turn_complete=True)),
+    ]
+
+    async def fake_receive():
+        for r in responses:
+            yield r
+            await asyncio.sleep(0.01)
+
+    fake_session.receive = fake_receive
+    fake_session.send_realtime_input = AsyncMock()
+
+    fake_client = MagicMock()
+    fake_connect_cm = AsyncMock()
+    fake_connect_cm.__aenter__.return_value = fake_session
+    fake_client.aio.live.connect.return_value = fake_connect_cm
+
+    orchestrator = ADKLiveOrchestrator(api_key="mock-key", client=fake_client)
+    audio_in_queue = asyncio.Queue()
+    stop_event = asyncio.Event()
+    received_events = []
+
+    async def callback(event_type: str, payload):
+        received_events.append((event_type, payload))
+
+    session_task = asyncio.create_task(
+        orchestrator.start_live_session(
+            audio_in_queue=audio_in_queue,
+            event_out_callback=callback,
+            stop_event=stop_event,
+        )
+    )
+
+    await asyncio.sleep(0.1)
+    stop_event.set()
+    await asyncio.wait_for(session_task, timeout=1.0)
+
+    # Verify user transcript
+    user_transcripts = [e[1] for e in received_events if e[0] == "transcript" and e[1].get("role") == "user"]
+    assert len(user_transcripts) == 1
+    assert user_transcripts[0]["text"] == "Chào trợ lý"
+
+    # Verify agent stream chunks
+    agent_transcripts = [e[1] for e in received_events if e[0] == "transcript" and e[1].get("role") == "agent"]
+    assert len(agent_transcripts) == 2
+    assert agent_transcripts[0]["text"] == "Dạ em chào anh,"
+    assert agent_transcripts[1]["text"] == " em có thể giúp gì ạ?"

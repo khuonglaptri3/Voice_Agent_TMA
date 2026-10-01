@@ -1,6 +1,13 @@
 """Main entry point: FastAPI Server and LiveKit Worker."""
 from __future__ import annotations
 
+import os
+if "SSL_CERT_FILE" not in os.environ:
+    for ca_path in ["/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt"]:
+        if os.path.isfile(ca_path):
+            os.environ["SSL_CERT_FILE"] = ca_path
+            break
+
 from pathlib import Path
 
 import uvicorn

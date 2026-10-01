@@ -256,6 +256,64 @@ body {
   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
 }
 
+.transcript-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.transcript-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.transcript-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.transcript-message {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(15, 22, 36, 0.9);
+}
+
+.transcript-message.user {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.transcript-message.agent {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.transcript-role {
+  min-width: 56px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.transcript-text {
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
 .hero-top {
   display: flex;
   justify-content: space-between;
