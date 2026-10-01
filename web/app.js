@@ -59,9 +59,7 @@ let animationFrameId = null;
 let socketConnection = null;
 let isConnected = false;
 let isRecording = false;
-<<<<<<< HEAD
 let startInProgress = false;
-=======
 let isMuted = false;
 let isPlaybackEnabled = false;
 let isSessionActive = false;
@@ -113,7 +111,6 @@ function addLog(message, category = "system") {
   if (logCountBadge) {
     logCountBadge.textContent = `${totalLogEvents} events`;
   }
->>>>>>> a786ba6 (feat: integrate WebSocket audio streaming with Gemini Live)
 
   const item = document.createElement("li");
   item.className = `log-item ${category}`;
@@ -498,7 +495,6 @@ async function startCall() {
     return;
   }
 
-<<<<<<< HEAD
   startInProgress = true;
   toggleButton.disabled = true;
   toggleButton.textContent = "Starting...";
@@ -508,14 +504,8 @@ async function startCall() {
       throw new Error("This browser does not support microphone access.");
     }
 
-    if (!isConnected) {
-      connectSocket();
-    }
-=======
-  try {
     await ensureSocketConnected();
     await startLiveSession();
->>>>>>> a786ba6 (feat: integrate WebSocket audio streaming with Gemini Live)
 
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {

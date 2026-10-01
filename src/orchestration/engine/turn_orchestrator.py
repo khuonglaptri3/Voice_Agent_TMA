@@ -37,6 +37,39 @@ except ImportError:
     LiveRequestQueue = asyncio.Queue  # type: ignore
 
 
+SUPPORTED_VOICES = ("Puck", "Charon", "Kore", "Fenrir", "Aoede")
+
+
+class VoicePersona:
+    """Manages system instruction personas tailored for real-time Vietnamese speech synthesis."""
+
+    TEMPLATES: dict[str, str] = {
+        "default": (
+            "Bạn là Trợ lý giọng nói thông minh bằng tiếng Việt của TMA Solutions. "
+            "Quy tắc phản hồi qua giọng nói:\n"
+            "1. Luôn trả lời ngắn gọn, súc tích, tối đa dưới 2 câu.\n"
+            "2. Sử dụng văn phong giao tiếp tự nhiên, lịch sự (dạ, thưa, ạ).\n"
+            "3. Tuyệt đối KHÔNG dùng ký tự định dạng Markdown (như *, **, #, gạch đầu dòng, danh sách số), "
+            "không dùng code block, không dùng bảng biểu để tránh lỗi phát âm TTS."
+        ),
+        "concise": (
+            "Bạn là trợ lý tiếng Việt siêu ngắn gọn của TMA Solutions. "
+            "Chỉ trả lời trong đúng 1 hoặc 2 câu ngắn. "
+            "Tuyệt đối không dùng Markdown, danh sách liệt kê hay ký tự đặc biệt."
+        ),
+        "customer_service": (
+            "Bạn là nhân viên lễ tân, chăm sóc khách hàng bằng tiếng Việt của TMA Solutions. "
+            "Giao tiếp cực kỳ lịch thiệp, niềm nở ('Dạ em nghe', 'Dạ vâng ạ'). "
+            "Trả lời ngắn gọn dưới 2 câu. Tuyệt đối không dùng định dạng Markdown hay ký tự lạ."
+        ),
+    }
+
+    @classmethod
+    def get_persona(cls, name: str = "default") -> str:
+        """Get persona system instruction by name."""
+        return cls.TEMPLATES.get(name, cls.TEMPLATES["default"])
+
+
 class ADKLiveOrchestrator:
     """Manages real-time bidirectional streaming sessions with Gemini Live API."""
 
@@ -48,14 +81,14 @@ class ADKLiveOrchestrator:
         system_instruction: Optional[str] = None,
         client: Optional[Any] = None,
     ) -> None:
+        if voice_name not in SUPPORTED_VOICES:
+            raise ValueError(
+                f"Unsupported voice '{voice_name}'. Supported voices are: {', '.join(SUPPORTED_VOICES)}"
+            )
         self.api_key = api_key or getattr(settings, "GOOGLE_API_KEY", None) or os.getenv("GOOGLE_API_KEY")
         self.model = model or getattr(settings, "GEMINI_LIVE_MODEL", None) or os.getenv("GEMINI_LIVE_MODEL", "gemini-2.5-flash-native-audio-latest")
         self.voice_name = voice_name
-        self.system_instruction = system_instruction or (
-            "Bạn là Trợ lý giọng nói thông minh bằng tiếng Việt của TMA Solutions. "
-            "Hãy trả lời thật ngắn gọn, súc tích (dưới 2 câu), thân thiện và tự nhiên. "
-            "Tuyệt đối không dùng ký tự Markdown, code block hay bảng biểu."
-        )
+        self.system_instruction = system_instruction or VoicePersona.get_persona("default")
         self._client = client
 
     def _get_client(self) -> Any:
@@ -211,6 +244,17 @@ class ADKLiveOrchestrator:
                                         "audio",
                                         inline_data.data,
                                     )
+
+                        # 4. Handle Turn Complete
+                        if getattr(server_content, "turn_complete", False):
+                            await self._safe_dispatch(
+                                event_out_callback,
+                                "turn_complete",
+                                {
+                                    "type": "turn_complete",
+                                    "timestamp_ms": int(time.time() * 1000),
+                                },
+                            )
 
                 except asyncio.CancelledError:
                     pass
