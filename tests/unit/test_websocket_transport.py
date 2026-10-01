@@ -113,3 +113,72 @@ def test_websocket_transport_rejects_invalid_voice():
             assert err["code"] == "invalid_voice"
             assert "Unsupported voice" in err["message"]
 
+
+def test_websocket_transport_grace_guard_filters_echo():
+    """Verify that WebSocketTransport drops acoustic echo frames when GraceGuard is locked."""
+    from src.guardrails.output_filters.grace_guard import GraceGuardManager
+
+    app = FastAPI()
+    mock_orchestrator = MagicMock()
+    mock_orchestrator.api_key = "mock-key"
+    mock_queue = asyncio.Queue()
+    mock_orchestrator.create_live_request_queue.return_value = mock_queue
+
+    received_audio = []
+
+    async def mock_start_live_session(audio_in_queue, event_out_callback, stop_event):
+        await event_out_callback("session_ready", {"type": "session_ready", "status": "connected"})
+        # Simulate agent finished speaking, triggering grace guard
+        await event_out_callback("turn_complete", {"type": "turn_complete"})
+        while not stop_event.is_set():
+            try:
+                chunk = await asyncio.wait_for(audio_in_queue.get(), timeout=0.1)
+                if chunk is not None:
+                    received_audio.append(chunk)
+            except asyncio.TimeoutError:
+                continue
+
+    mock_orchestrator.start_live_session = mock_start_live_session
+
+    custom_guard = GraceGuardManager(lockout_seconds=10.0, echo_energy_threshold=0.03)
+
+    @app.websocket("/ws/live")
+    async def ws_endpoint(ws: WebSocket):
+        transport = WebSocketTransport(
+            ws,
+            orchestrator_factory=lambda: mock_orchestrator,
+            grace_guard=custom_guard,
+        )
+        await transport.start()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/live") as websocket:
+            websocket.send_json({"type": "session_start", "sample_rate": 16000})
+            websocket.receive_json()  # session_ack
+            websocket.receive_json()  # session_ready
+            turn_done = websocket.receive_json()  # turn_complete
+            assert turn_done["type"] == "turn_complete"
+
+            # 1. Send low-energy echo frame (silence/low noise)
+            low_energy_chunk = b"\x00\x00" * 512
+            websocket.send_bytes(low_energy_chunk)
+
+            # Wait briefly to ensure it was processed by receive loop
+            import time
+            time.sleep(0.05)
+
+            # Queue must still be empty because GraceGuard dropped the echo
+            assert len(received_audio) == 0
+            assert custom_guard.filtered_frames_count == 1
+
+            # 2. Send loud intentional barge-in speech frame
+            import numpy as np
+            loud_chunk = (np.sin(np.linspace(0, 10, 512)) * 0.4 * 32767).astype(np.int16).tobytes()
+            websocket.send_bytes(loud_chunk)
+            time.sleep(0.05)
+
+            # Loud chunk must pass through to the audio queue
+            assert len(received_audio) == 1
+            assert received_audio[0] == loud_chunk
+            assert custom_guard.passed_frames_count == 1
+

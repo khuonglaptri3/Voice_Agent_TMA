@@ -236,6 +236,12 @@ body {
   box-shadow: none;
 }
 
+.status-indicator-dot.barge-in-pulse {
+  background-color: #f59e0b !important;
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.95) !important;
+  transform: scale(1.4);
+}
+
 #status {
   font-weight: 600;
   color: var(--status-warn);

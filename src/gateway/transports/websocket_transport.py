@@ -9,6 +9,7 @@ from typing import Any, Callable, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 
 from src.gateway.transports.base import BaseTransport
+from src.guardrails.output_filters.grace_guard import GraceGuardManager
 from src.orchestration.engine.turn_orchestrator import ADKLiveOrchestrator, VoicePersona
 
 logger = logging.getLogger(__name__)
@@ -21,10 +22,12 @@ class WebSocketTransport(BaseTransport):
         self,
         websocket: WebSocket | None = None,
         orchestrator_factory: Optional[Callable[[], ADKLiveOrchestrator]] = None,
+        grace_guard: Optional[GraceGuardManager] = None,
     ) -> None:
         self.websocket = websocket
         self._send_lock = asyncio.Lock()
         self._orchestrator_factory = orchestrator_factory or ADKLiveOrchestrator
+        self.grace_guard = grace_guard or GraceGuardManager()
 
     async def _send_json(self, payload: dict[str, Any]) -> None:
         if self.websocket is None:
@@ -35,6 +38,11 @@ class WebSocketTransport(BaseTransport):
     async def _send_event(self, event_type: str, payload: Any) -> None:
         if self.websocket is None:
             return
+
+        if event_type == "audio":
+            self.grace_guard.mark_tts_active()
+        elif event_type in ("turn_complete", "interrupted"):
+            self.grace_guard.mark_tts_ended()
 
         async with self._send_lock:
             if event_type == "audio":
@@ -50,6 +58,7 @@ class WebSocketTransport(BaseTransport):
         stop_event: asyncio.Event | None,
         session_task: asyncio.Task | None,
     ) -> None:
+        self.grace_guard.reset()
         if stop_event is not None:
             stop_event.set()
         if audio_queue is not None:
@@ -109,6 +118,9 @@ class WebSocketTransport(BaseTransport):
                             "message": "Send session_start before audio frames.",
                         })
                     else:
+                        if self.grace_guard.should_filter_frame(message["bytes"]):
+                            logger.debug("Dropped acoustic echo frame during post-TTS grace window")
+                            continue
                         await audio_queue.put(message["bytes"])
                     continue
 

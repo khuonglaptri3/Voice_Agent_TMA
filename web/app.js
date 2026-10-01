@@ -218,6 +218,34 @@ function finishCurrentTurn() {
 }
 
 /**
+ * Audio Playback Buffer Truncation (Day 4 - Dev B)
+ * Immediately stop active playing audio nodes, flush pending queue,
+ * and reset scheduled playback timeline.
+ */
+function truncatePlayback(reason = "interrupted") {
+  // 1. Immediately stop and disconnect all playing Web Audio nodes (< 250ms cutoff)
+  playbackSources.forEach((source) => {
+    try {
+      source.stop(0);
+      source.disconnect();
+    } catch {}
+  });
+  playbackSources.clear();
+
+  // 2. Clear pending buffer queue
+  audioQueue = [];
+  isDrainingAudioQueue = false;
+
+  // 3. Reset scheduled playback timeline to current AudioContext time
+  if (outputAudioContext) {
+    nextPlayTime = outputAudioContext.currentTime;
+  }
+
+  // 4. Close current subtitle bubble
+  finishCurrentTurn();
+}
+
+/**
  * Play received PCM Int16 frame back to speaker (when playback enabled)
  */
 function playServerPcmFrame(arrayBuffer) {
@@ -341,17 +369,20 @@ function connectSocket() {
         finishCurrentTurn();
         addLog("Turn complete.", "system");
       } else if (payload.type === "interrupted") {
-        audioQueue = [];
-        finishCurrentTurn();
-        playbackSources.forEach((source) => {
-          try { source.stop(); } catch {}
-        });
-        playbackSources.clear();
-        nextPlayTime = outputAudioContext ? outputAudioContext.currentTime : 0;
-        addLog("Agent audio interrupted.", "system");
+        const clientTimestamp = Date.now();
+        const serverTimestamp = payload.timestamp_ms || clientTimestamp;
+        const latencyMs = Math.max(0, clientTimestamp - serverTimestamp);
+
+        truncatePlayback("server_interrupted");
+        addLog(`⚡ Barge-in: Agent speech truncated (< 250ms target, transit latency: ${latencyMs}ms)`, "system");
+        showToast("⚡ Barge-in: Ngắt lời Agent thành công (< 250ms)");
+
+        if (statusDot) {
+          statusDot.classList.add("barge-in-pulse");
+          setTimeout(() => statusDot.classList.remove("barge-in-pulse"), 800);
+        }
       } else if (payload.type === "session_stop") {
-        audioQueue = [];
-        finishCurrentTurn();
+        truncatePlayback("session_stop");
         isSessionActive = false;
         addLog("Live session stopped.", "system");
       } else {
@@ -541,6 +572,14 @@ function renderVisualizer() {
     }
   }
 
+  // Fast Barge-in Client Preemption (Day 4 - Dev B):
+  // If Agent audio is actively playing through speakers and user starts speaking intentionally
+  // (peak amplitude > 0.22, ~ -13 dB), preemptively cut speaker playback immediately (< 50ms)
+  if (playbackSources.size > 0 && peak > 0.22) {
+    truncatePlayback("client_barge_in_preempt");
+    addLog("⚡ Client VAD: Intentional user speech detected during playback -> Truncating speaker audio immediately.", "system");
+  }
+
   animationFrameId = requestAnimationFrame(renderVisualizer);
 }
 
@@ -690,8 +729,7 @@ async function startCall() {
  */
 function stopCall() {
   isRecording = false;
-  audioQueue = [];
-  finishCurrentTurn();
+  truncatePlayback("call_stopped");
 
   stopCallTimer();
 
