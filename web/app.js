@@ -85,6 +85,8 @@ let totalLogEvents = 0;
 let outputAudioContext = null;
 let nextPlayTime = 0;
 const playbackSources = new Set();
+let consecutiveSpeechFrames = 0;
+let lastClientBargeInTime = 0;
 
 
 /**
@@ -677,10 +679,18 @@ function renderVisualizer() {
 
   // Fast Barge-in Client Preemption (Day 4 - Dev B):
   // If Agent audio is actively playing through speakers and user starts speaking intentionally
-  // (peak amplitude > 0.22, ~ -13 dB), preemptively cut speaker playback immediately (< 50ms)
-  if (playbackSources.size > 0 && peak > 0.22) {
-    truncatePlayback("client_barge_in_preempt");
-    addLog("⚡ Client VAD: Intentional user speech detected during playback -> Truncating speaker audio immediately.", "system");
+  // (sustained peak amplitude > 0.32), preemptively cut speaker playback (< 50ms)
+  if (playbackSources.size > 0 && peak > 0.32) {
+    consecutiveSpeechFrames += 1;
+    const now = Date.now();
+    if (consecutiveSpeechFrames >= 3 && now - lastClientBargeInTime > 1500) {
+      lastClientBargeInTime = now;
+      consecutiveSpeechFrames = 0;
+      truncatePlayback("client_barge_in_preempt");
+      addLog("⚡ Client VAD: Intentional user speech detected during playback -> Truncating speaker audio immediately.", "system");
+    }
+  } else {
+    consecutiveSpeechFrames = 0;
   }
 
   animationFrameId = requestAnimationFrame(renderVisualizer);

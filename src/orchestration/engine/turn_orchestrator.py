@@ -187,10 +187,13 @@ class ADKLiveOrchestrator:
                 {"type": "session_ready", "status": "connected"},
             )
 
+            is_interrupted = False
+
             async def send_audio_worker():
                 """Continuously read audio frames from queue and stream to Gemini."""
-                try:
-                    while not stop_event.is_set():
+                nonlocal is_interrupted
+                while not stop_event.is_set():
+                    try:
                         try:
                             # Use timeout to regularly check stop_event
                             chunk = await asyncio.wait_for(audio_in_queue.get(), timeout=0.1)
@@ -206,15 +209,20 @@ class ADKLiveOrchestrator:
                                 mime_type="audio/pcm;rate=16000",
                             )
                         )
-                except asyncio.CancelledError:
-                    pass
-                except Exception as exc:
-                    if not stop_event.is_set():
-                        logger.error(f"Error sending audio to Gemini Live: {exc}", exc_info=True)
+                        # Reset interruption state as soon as user streams fresh audio to Gemini
+                        if is_interrupted:
+                            is_interrupted = False
+                            logger.debug("New user audio streamed to Gemini Live -> cleared is_interrupted state.")
+                    except asyncio.CancelledError:
+                        break
+                    except Exception as exc:
+                        if not stop_event.is_set():
+                            logger.error(f"Error sending audio to Gemini Live: {exc}", exc_info=True)
+                            await asyncio.sleep(0.02)
 
             async def receive_events_worker():
                 """Listen for server responses: audio chunks, transcripts, and barge-in."""
-                is_interrupted = False
+                nonlocal is_interrupted
                 try:
                     async for response in session.receive():
                         if stop_event.is_set():
@@ -332,6 +340,8 @@ class ADKLiveOrchestrator:
                                 dispatch_latency_ms,
                                 drained,
                             )
+                            if getattr(server_content, "turn_complete", False):
+                                is_interrupted = False
                             continue
 
                         # 2. Handle User Transcription (Final & Interim)
@@ -366,23 +376,24 @@ class ADKLiveOrchestrator:
                         # 3. Handle Agent Output Transcription
                         output_transcription = getattr(server_content, "output_transcription", None)
                         if output_transcription and getattr(output_transcription, "text", None):
-                            if not is_interrupted:
-                                await self._safe_dispatch(
-                                    event_out_callback,
-                                    "transcript",
-                                    {
-                                        "type": "transcript",
-                                        "role": "agent",
-                                        "text": output_transcription.text,
-                                        "is_final": getattr(output_transcription, "finished", False) or False,
-                                    },
-                                )
+                            is_interrupted = False
+                            await self._safe_dispatch(
+                                event_out_callback,
+                                "transcript",
+                                {
+                                    "type": "transcript",
+                                    "role": "agent",
+                                    "text": output_transcription.text,
+                                    "is_final": getattr(output_transcription, "finished", False) or False,
+                                },
+                            )
 
                         # 4. Handle Model Turn (Audio & Agent Text fallback)
                         model_turn = getattr(server_content, "model_turn", None)
                         if model_turn and getattr(model_turn, "parts", None):
                             if is_interrupted:
                                 logger.debug("Discarding residual model turn audio/text after interruption.")
+                                is_interrupted = False  # Auto-clear residual after consuming once
                             else:
                                 for part in model_turn.parts:
                                     if getattr(part, "text", None):
@@ -404,17 +415,18 @@ class ADKLiveOrchestrator:
                                             inline_data.data,
                                         )
 
-                        # 5. Handle Turn Complete
-                        if getattr(server_content, "turn_complete", False):
+                        # 5. Handle Turn Complete / Generation Complete
+                        if getattr(server_content, "turn_complete", False) or getattr(server_content, "generation_complete", False):
                             is_interrupted = False
-                            await self._safe_dispatch(
-                                event_out_callback,
-                                "turn_complete",
-                                {
-                                    "type": "turn_complete",
-                                    "timestamp_ms": int(time.time() * 1000),
-                                },
-                            )
+                            if getattr(server_content, "turn_complete", False):
+                                await self._safe_dispatch(
+                                    event_out_callback,
+                                    "turn_complete",
+                                    {
+                                        "type": "turn_complete",
+                                        "timestamp_ms": int(time.time() * 1000),
+                                    },
+                                )
 
                 except asyncio.CancelledError:
                     pass
