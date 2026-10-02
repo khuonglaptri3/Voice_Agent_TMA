@@ -106,8 +106,22 @@
               </svg>
               <h2>Live Transcript</h2>
             </div>
+            <!-- Tool Activity Status Badge (Day 5 - Dev B) -->
+            <div id="tool-activity-badge" class="tool-activity-badge hidden" aria-live="polite">
+              <span class="tool-pulse-dot"></span>
+              <span id="tool-activity-icon" class="tool-icon">⚙️</span>
+              <span id="tool-activity-text" class="tool-activity-text">AI đang tra cứu dữ liệu...</span>
+            </div>
           </div>
           <ul id="transcript-list" class="transcript-list" aria-live="polite"></ul>
+
+          <!-- Sample Voice Tool Calling Prompts (Day 5 - Dev B) -->
+          <div class="tool-prompts-bar" aria-label="Suggested Voice Tool Queries">
+            <span class="tool-prompts-label">Thử gọi công cụ bằng giọng nói:</span>
+            <span class="tool-chip" title="Nói câu này vào micro để thử get_current_time">⏱️ "Bây giờ là mấy giờ?"</span>
+            <span class="tool-chip" title="Nói câu này vào micro để thử check_meeting_room">🏢 "Phòng Lab A có đang trống không?"</span>
+            <span class="tool-chip" title="Nói câu này vào micro để thử check_meeting_room">📅 "Phòng 102 có lịch họp không?"</span>
+          </div>
         </section>
 
         <!-- Control Action Bar -->
