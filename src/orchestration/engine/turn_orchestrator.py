@@ -37,6 +37,39 @@ except ImportError:
     LiveRequestQueue = asyncio.Queue  # type: ignore
 
 
+SUPPORTED_VOICES = ("Puck", "Charon", "Kore", "Fenrir", "Aoede")
+
+
+class VoicePersona:
+    """Manages system instruction personas tailored for real-time Vietnamese speech synthesis."""
+
+    TEMPLATES: dict[str, str] = {
+        "default": (
+            "Bạn là Trợ lý giọng nói thông minh bằng tiếng Việt của TMA Solutions. "
+            "Quy tắc phản hồi qua giọng nói:\n"
+            "1. Luôn trả lời ngắn gọn, súc tích, tối đa dưới 2 câu.\n"
+            "2. Sử dụng văn phong giao tiếp tự nhiên, lịch sự (dạ, thưa, ạ).\n"
+            "3. Tuyệt đối KHÔNG dùng ký tự định dạng Markdown (như *, **, #, gạch đầu dòng, danh sách số), "
+            "không dùng code block, không dùng bảng biểu để tránh lỗi phát âm TTS."
+        ),
+        "concise": (
+            "Bạn là trợ lý tiếng Việt siêu ngắn gọn của TMA Solutions. "
+            "Chỉ trả lời trong đúng 1 hoặc 2 câu ngắn. "
+            "Tuyệt đối không dùng Markdown, danh sách liệt kê hay ký tự đặc biệt."
+        ),
+        "customer_service": (
+            "Bạn là nhân viên lễ tân, chăm sóc khách hàng bằng tiếng Việt của TMA Solutions. "
+            "Giao tiếp cực kỳ lịch thiệp, niềm nở ('Dạ em nghe', 'Dạ vâng ạ'). "
+            "Trả lời ngắn gọn dưới 2 câu. Tuyệt đối không dùng định dạng Markdown hay ký tự lạ."
+        ),
+    }
+
+    @classmethod
+    def get_persona(cls, name: str = "default") -> str:
+        """Get persona system instruction by name."""
+        return cls.TEMPLATES.get(name, cls.TEMPLATES["default"])
+
+
 class ADKLiveOrchestrator:
     """Manages real-time bidirectional streaming sessions with Gemini Live API."""
 
@@ -48,14 +81,14 @@ class ADKLiveOrchestrator:
         system_instruction: Optional[str] = None,
         client: Optional[Any] = None,
     ) -> None:
+        if voice_name not in SUPPORTED_VOICES:
+            raise ValueError(
+                f"Unsupported voice '{voice_name}'. Supported voices are: {', '.join(SUPPORTED_VOICES)}"
+            )
         self.api_key = api_key or getattr(settings, "GOOGLE_API_KEY", None) or os.getenv("GOOGLE_API_KEY")
         self.model = model or getattr(settings, "GEMINI_LIVE_MODEL", None) or os.getenv("GEMINI_LIVE_MODEL", "gemini-2.5-flash-native-audio-latest")
         self.voice_name = voice_name
-        self.system_instruction = system_instruction or (
-            "Bạn là Trợ lý giọng nói thông minh bằng tiếng Việt của TMA Solutions. "
-            "Hãy trả lời thật ngắn gọn, súc tích (dưới 2 câu), thân thiện và tự nhiên. "
-            "Tuyệt đối không dùng ký tự Markdown, code block hay bảng biểu."
-        )
+        self.system_instruction = system_instruction or VoicePersona.get_persona("default")
         self._client = client
 
     def _get_client(self) -> Any:
@@ -63,6 +96,22 @@ class ADKLiveOrchestrator:
             return self._client
         from google import genai
         return genai.Client(api_key=self.api_key)
+
+    @staticmethod
+    def reset_audio_queue(queue: asyncio.Queue) -> int:
+        """Drain and clear all pending audio chunks in the input queue upon interruption."""
+        drained = 0
+        while not queue.empty():
+            try:
+                queue.get_nowait()
+                try:
+                    queue.task_done()
+                except ValueError:
+                    pass
+                drained += 1
+            except asyncio.QueueEmpty:
+                break
+        return drained
 
     def create_live_request_queue(self) -> asyncio.Queue:
         """Create an asynchronous queue for incoming audio chunks."""
@@ -113,6 +162,8 @@ class ADKLiveOrchestrator:
                     )
                 )
             ),
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
             system_instruction=types.Content(
                 parts=[types.Part.from_text(text=self.system_instruction)]
             ),
@@ -153,6 +204,7 @@ class ADKLiveOrchestrator:
 
             async def receive_events_worker():
                 """Listen for server responses: audio chunks, transcripts, and barge-in."""
+                is_interrupted = False
                 try:
                     async for response in session.receive():
                         if stop_event.is_set():
@@ -162,22 +214,33 @@ class ADKLiveOrchestrator:
                         if not server_content:
                             continue
 
-                        # 1. Handle Barge-in Interruption
+                        # 1. Handle Barge-in Interruption (Day 4 - Dev A)
                         if getattr(server_content, "interrupted", False):
+                            is_interrupted = True
+                            drained = self.reset_audio_queue(audio_in_queue)
+                            t0 = time.perf_counter()
+                            now_ms = int(time.time() * 1000)
                             await self._safe_dispatch(
                                 event_out_callback,
                                 "interrupted",
                                 {
                                     "type": "interrupted",
-                                    "timestamp_ms": int(time.time() * 1000),
+                                    "timestamp_ms": now_ms,
                                     "reason": "user_barge_in",
                                 },
                             )
+                            dispatch_latency_ms = (time.perf_counter() - t0) * 1000
+                            logger.info(
+                                "⚡ Barge-in interruption handled in %.2fms (<50ms target). Drained %d queue frames.",
+                                dispatch_latency_ms,
+                                drained,
+                            )
                             continue
 
-                        # 2. Handle User Transcription
+                        # 2. Handle User Transcription (Final & Interim)
                         input_transcription = getattr(server_content, "input_transcription", None)
                         if input_transcription and getattr(input_transcription, "text", None):
+                            is_interrupted = False
                             await self._safe_dispatch(
                                 event_out_callback,
                                 "transcript",
@@ -189,28 +252,72 @@ class ADKLiveOrchestrator:
                                 },
                             )
 
-                        # 3. Handle Model Turn (Audio & Agent Text)
+                        interim_transcription = getattr(server_content, "interim_input_transcription", None)
+                        if interim_transcription and getattr(interim_transcription, "text", None):
+                            is_interrupted = False
+                            await self._safe_dispatch(
+                                event_out_callback,
+                                "transcript",
+                                {
+                                    "type": "transcript",
+                                    "role": "user",
+                                    "text": interim_transcription.text,
+                                    "is_final": False,
+                                },
+                            )
+
+                        # 3. Handle Agent Output Transcription
+                        output_transcription = getattr(server_content, "output_transcription", None)
+                        if output_transcription and getattr(output_transcription, "text", None):
+                            if not is_interrupted:
+                                await self._safe_dispatch(
+                                    event_out_callback,
+                                    "transcript",
+                                    {
+                                        "type": "transcript",
+                                        "role": "agent",
+                                        "text": output_transcription.text,
+                                        "is_final": getattr(output_transcription, "finished", False) or False,
+                                    },
+                                )
+
+                        # 4. Handle Model Turn (Audio & Agent Text fallback)
                         model_turn = getattr(server_content, "model_turn", None)
                         if model_turn and getattr(model_turn, "parts", None):
-                            for part in model_turn.parts:
-                                if getattr(part, "text", None):
-                                    await self._safe_dispatch(
-                                        event_out_callback,
-                                        "transcript",
-                                        {
-                                            "type": "transcript",
-                                            "role": "agent",
-                                            "text": part.text,
-                                            "is_final": False,
-                                        },
-                                    )
-                                inline_data = getattr(part, "inline_data", None)
-                                if inline_data and getattr(inline_data, "data", None):
-                                    await self._safe_dispatch(
-                                        event_out_callback,
-                                        "audio",
-                                        inline_data.data,
-                                    )
+                            if is_interrupted:
+                                logger.debug("Discarding residual model turn audio/text after interruption.")
+                            else:
+                                for part in model_turn.parts:
+                                    if getattr(part, "text", None):
+                                        await self._safe_dispatch(
+                                            event_out_callback,
+                                            "transcript",
+                                            {
+                                                "type": "transcript",
+                                                "role": "agent",
+                                                "text": part.text,
+                                                "is_final": False,
+                                            },
+                                        )
+                                    inline_data = getattr(part, "inline_data", None)
+                                    if inline_data and getattr(inline_data, "data", None):
+                                        await self._safe_dispatch(
+                                            event_out_callback,
+                                            "audio",
+                                            inline_data.data,
+                                        )
+
+                        # 5. Handle Turn Complete
+                        if getattr(server_content, "turn_complete", False):
+                            is_interrupted = False
+                            await self._safe_dispatch(
+                                event_out_callback,
+                                "turn_complete",
+                                {
+                                    "type": "turn_complete",
+                                    "timestamp_ms": int(time.time() * 1000),
+                                },
+                            )
 
                 except asyncio.CancelledError:
                     pass

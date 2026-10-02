@@ -55,15 +55,15 @@ let workletNode = null;
 let sourceNode = null;
 let analyserNode = null;
 let animationFrameId = null;
+let audioQueue = [];
+let isDrainingAudioQueue = false;
 
 let socketConnection = null;
 let isConnected = false;
 let isRecording = false;
-<<<<<<< HEAD
 let startInProgress = false;
-=======
 let isMuted = false;
-let isPlaybackEnabled = false;
+let isPlaybackEnabled = true;
 let isSessionActive = false;
 let sessionAckResolver = null;
 let sessionAckRejecter = null;
@@ -79,6 +79,7 @@ let totalLogEvents = 0;
 let outputAudioContext = null;
 let nextPlayTime = 0;
 const playbackSources = new Set();
+
 
 /**
  * Toast Notification Utility
@@ -113,7 +114,6 @@ function addLog(message, category = "system") {
   if (logCountBadge) {
     logCountBadge.textContent = `${totalLogEvents} events`;
   }
->>>>>>> a786ba6 (feat: integrate WebSocket audio streaming with Gemini Live)
 
   const item = document.createElement("li");
   item.className = `log-item ${category}`;
@@ -154,46 +154,171 @@ function updateStatus(label, connected) {
 }
 
 /**
+ * Escape transcript text so it remains safe in the UI.
+ */
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+let currentTurnRole = null;
+let currentTranscriptEl = null;
+let currentTurnAccumulatedText = "";
+
+function flushTurnLog() {
+  if (currentTurnRole && currentTurnAccumulatedText.trim()) {
+    const speaker = currentTurnRole === "user" ? "You" : "Agent";
+    addLog(`${speaker}: ${currentTurnAccumulatedText.trim()}`, "server");
+  }
+  currentTurnAccumulatedText = "";
+}
+
+function handleLiveTranscript(role, text, isFinal = false) {
+  const transcriptList = document.getElementById("transcript-list");
+  if (!transcriptList || !text) return;
+
+  // Flush previous speaker's accumulated log if speaker changed
+  if (currentTurnRole !== role) {
+    flushTurnLog();
+    currentTurnRole = role;
+    currentTranscriptEl = null;
+    currentTurnAccumulatedText = "";
+  }
+
+  // Start a new transcript bubble if no active bubble
+  if (!currentTranscriptEl) {
+    const item = document.createElement("li");
+    item.className = `transcript-message ${role === "user" ? "user" : "agent"}`;
+
+    const speaker = document.createElement("span");
+    speaker.className = "transcript-role";
+    speaker.textContent = role === "user" ? "You" : "Agent";
+
+    const message = document.createElement("span");
+    message.className = "transcript-text";
+    message.textContent = text;
+
+    item.appendChild(speaker);
+    item.appendChild(message);
+    transcriptList.appendChild(item);
+    currentTranscriptEl = message;
+    currentTurnAccumulatedText = text;
+  } else {
+    // Append streaming text or update final text for the active speaker bubble
+    if (role === "user" && isFinal) {
+      currentTranscriptEl.textContent = text;
+      currentTurnAccumulatedText = text;
+    } else {
+      currentTranscriptEl.textContent += text;
+      currentTurnAccumulatedText += text;
+    }
+  }
+
+  // Smooth scroll to latest subtitle
+  transcriptList.scrollTop = transcriptList.scrollHeight;
+
+  while (transcriptList.children.length > 30) {
+    transcriptList.removeChild(transcriptList.firstChild);
+  }
+
+  if (isFinal) {
+    flushTurnLog();
+    currentTurnRole = null;
+    currentTranscriptEl = null;
+  }
+}
+
+function finishCurrentTurn() {
+  flushTurnLog();
+  currentTurnRole = null;
+  currentTranscriptEl = null;
+}
+
+/**
+ * Audio Playback Buffer Truncation (Day 4 - Dev B)
+ * Immediately stop active playing audio nodes, flush pending queue,
+ * and reset scheduled playback timeline.
+ */
+function truncatePlayback(reason = "interrupted") {
+  // 1. Immediately stop and disconnect all playing Web Audio nodes (< 250ms cutoff)
+  playbackSources.forEach((source) => {
+    try {
+      source.stop(0);
+      source.disconnect();
+    } catch {}
+  });
+  playbackSources.clear();
+
+  // 2. Clear pending buffer queue
+  audioQueue = [];
+  isDrainingAudioQueue = false;
+
+  // 3. Reset scheduled playback timeline to current AudioContext time
+  if (outputAudioContext) {
+    nextPlayTime = outputAudioContext.currentTime;
+  }
+
+  // 4. Close current subtitle bubble
+  finishCurrentTurn();
+}
+
+/**
  * Play received PCM Int16 frame back to speaker (when playback enabled)
  */
 function playServerPcmFrame(arrayBuffer) {
   if (!isPlaybackEnabled) return;
 
+  audioQueue.push(arrayBuffer);
+  if (isDrainingAudioQueue) return;
+
+  isDrainingAudioQueue = true;
+
   try {
-    if (!outputAudioContext) {
-      outputAudioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: OUTPUT_SAMPLE_RATE,
-      });
+    while (audioQueue.length > 0) {
+      const currentChunk = audioQueue.shift();
+      if (!outputAudioContext) {
+        outputAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: OUTPUT_SAMPLE_RATE,
+        });
+      }
+
+      if (outputAudioContext.state === "suspended") {
+        outputAudioContext.resume();
+      }
+
+      const int16 = new Int16Array(currentChunk);
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 32768.0;
+      }
+
+      const audioBuffer = outputAudioContext.createBuffer(1, float32.length, OUTPUT_SAMPLE_RATE);
+      audioBuffer.copyToChannel(float32, 0);
+
+      const source = outputAudioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(outputAudioContext.destination);
+      playbackSources.add(source);
+      source.onended = () => {
+        playbackSources.delete(source);
+      };
+
+      const now = outputAudioContext.currentTime;
+      if (nextPlayTime < now) {
+        nextPlayTime = now + 0.02;
+      }
+
+      source.start(nextPlayTime);
+      nextPlayTime += audioBuffer.duration;
     }
-
-    if (outputAudioContext.state === "suspended") {
-      outputAudioContext.resume();
-    }
-
-    const int16 = new Int16Array(arrayBuffer);
-    const float32 = new Float32Array(int16.length);
-    for (let i = 0; i < int16.length; i++) {
-      float32[i] = int16[i] / 32768.0;
-    }
-
-    const audioBuffer = outputAudioContext.createBuffer(1, float32.length, OUTPUT_SAMPLE_RATE);
-    audioBuffer.copyToChannel(float32, 0);
-
-    const source = outputAudioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(outputAudioContext.destination);
-    playbackSources.add(source);
-    source.onended = () => playbackSources.delete(source);
-
-    const now = outputAudioContext.currentTime;
-    if (nextPlayTime < now) {
-      nextPlayTime = now + 0.02; // Small 20ms jitter buffer
-    }
-
-    source.start(nextPlayTime);
-    nextPlayTime += audioBuffer.duration;
   } catch (err) {
     console.error("Audio playback error:", err);
+  } finally {
+    isDrainingAudioQueue = false;
   }
 }
 
@@ -230,7 +355,10 @@ function connectSocket() {
       }
 
       playServerPcmFrame(event.data);
-      addLog(`Model audio frame received (${bytes} bytes PCM).`, "audio");
+      // Log milestone audio frames instead of spamming 25-30 lines every second
+      if (totalPacketsReceived === 1 || totalPacketsReceived % 50 === 0) {
+        addLog(`Streaming model audio (${totalPacketsReceived} packets received)...`, "audio");
+      }
     } else if (typeof event.data === "string") {
       let payload;
       try {
@@ -259,15 +387,25 @@ function connectSocket() {
           sessionAckRejecter = null;
         }
       } else if (payload.type === "transcript") {
-        addLog(`${payload.role === "user" ? "You" : "Agent"}: ${payload.text}`, "server");
+        handleLiveTranscript(payload.role || "agent", payload.text || "", payload.is_final);
+      } else if (payload.type === "turn_complete") {
+        finishCurrentTurn();
+        addLog("Turn complete.", "system");
       } else if (payload.type === "interrupted") {
-        playbackSources.forEach((source) => {
-          try { source.stop(); } catch {}
-        });
-        playbackSources.clear();
-        nextPlayTime = outputAudioContext ? outputAudioContext.currentTime : 0;
-        addLog("Agent audio interrupted.", "system");
+        const clientTimestamp = Date.now();
+        const serverTimestamp = payload.timestamp_ms || clientTimestamp;
+        const latencyMs = Math.max(0, clientTimestamp - serverTimestamp);
+
+        truncatePlayback("server_interrupted");
+        addLog(`⚡ Barge-in: Agent speech truncated (< 250ms target, transit latency: ${latencyMs}ms)`, "system");
+        showToast("⚡ Barge-in: Ngắt lời Agent thành công (< 250ms)");
+
+        if (statusDot) {
+          statusDot.classList.add("barge-in-pulse");
+          setTimeout(() => statusDot.classList.remove("barge-in-pulse"), 800);
+        }
       } else if (payload.type === "session_stop") {
+        truncatePlayback("session_stop");
         isSessionActive = false;
         addLog("Live session stopped.", "system");
       } else {
@@ -457,6 +595,14 @@ function renderVisualizer() {
     }
   }
 
+  // Fast Barge-in Client Preemption (Day 4 - Dev B):
+  // If Agent audio is actively playing through speakers and user starts speaking intentionally
+  // (peak amplitude > 0.22, ~ -13 dB), preemptively cut speaker playback immediately (< 50ms)
+  if (playbackSources.size > 0 && peak > 0.22) {
+    truncatePlayback("client_barge_in_preempt");
+    addLog("⚡ Client VAD: Intentional user speech detected during playback -> Truncating speaker audio immediately.", "system");
+  }
+
   animationFrameId = requestAnimationFrame(renderVisualizer);
 }
 
@@ -498,7 +644,6 @@ async function startCall() {
     return;
   }
 
-<<<<<<< HEAD
   startInProgress = true;
   toggleButton.disabled = true;
   toggleButton.textContent = "Starting...";
@@ -507,15 +652,6 @@ async function startCall() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       throw new Error("This browser does not support microphone access.");
     }
-
-    if (!isConnected) {
-      connectSocket();
-    }
-=======
-  try {
-    await ensureSocketConnected();
-    await startLiveSession();
->>>>>>> a786ba6 (feat: integrate WebSocket audio streaming with Gemini Live)
 
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -526,6 +662,19 @@ async function startCall() {
         sampleRate: TARGET_SAMPLE_RATE,
       },
     });
+
+    // Ensure output audio context is unlocked during user gesture
+    if (!outputAudioContext) {
+      outputAudioContext = new (window.AudioContext || window.webkitAudioContext)({
+        sampleRate: OUTPUT_SAMPLE_RATE,
+      });
+    }
+    if (outputAudioContext.state === "suspended") {
+      await outputAudioContext.resume();
+    }
+
+    await ensureSocketConnected();
+    await startLiveSession();
 
     const actualSampleRate = micStream.getAudioTracks()[0]?.getSettings()?.sampleRate || 48000;
     audioContext = new (window.AudioContext || window.webkitAudioContext)({
@@ -603,6 +752,7 @@ async function startCall() {
  */
 function stopCall() {
   isRecording = false;
+  truncatePlayback("call_stopped");
 
   stopCallTimer();
 
