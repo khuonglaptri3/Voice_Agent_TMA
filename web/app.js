@@ -80,8 +80,6 @@ let outputAudioContext = null;
 let nextPlayTime = 0;
 const playbackSources = new Set();
 
-let currentTurnRole = null;
-let currentTranscriptEl = null;
 
 /**
  * Toast Notification Utility
@@ -167,14 +165,32 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+let currentTurnRole = null;
+let currentTranscriptEl = null;
+let currentTurnAccumulatedText = "";
+
+function flushTurnLog() {
+  if (currentTurnRole && currentTurnAccumulatedText.trim()) {
+    const speaker = currentTurnRole === "user" ? "You" : "Agent";
+    addLog(`${speaker}: ${currentTurnAccumulatedText.trim()}`, "server");
+  }
+  currentTurnAccumulatedText = "";
+}
+
 function handleLiveTranscript(role, text, isFinal = false) {
   const transcriptList = document.getElementById("transcript-list");
   if (!transcriptList || !text) return;
 
-  // Start a new transcript bubble if speaker changes or no active bubble
-  if (currentTurnRole !== role || !currentTranscriptEl) {
+  // Flush previous speaker's accumulated log if speaker changed
+  if (currentTurnRole !== role) {
+    flushTurnLog();
     currentTurnRole = role;
+    currentTranscriptEl = null;
+    currentTurnAccumulatedText = "";
+  }
 
+  // Start a new transcript bubble if no active bubble
+  if (!currentTranscriptEl) {
     const item = document.createElement("li");
     item.className = `transcript-message ${role === "user" ? "user" : "agent"}`;
 
@@ -190,12 +206,15 @@ function handleLiveTranscript(role, text, isFinal = false) {
     item.appendChild(message);
     transcriptList.appendChild(item);
     currentTranscriptEl = message;
+    currentTurnAccumulatedText = text;
   } else {
     // Append streaming text or update final text for the active speaker bubble
     if (role === "user" && isFinal) {
       currentTranscriptEl.textContent = text;
+      currentTurnAccumulatedText = text;
     } else {
       currentTranscriptEl.textContent += text;
+      currentTurnAccumulatedText += text;
     }
   }
 
@@ -207,12 +226,14 @@ function handleLiveTranscript(role, text, isFinal = false) {
   }
 
   if (isFinal) {
+    flushTurnLog();
     currentTurnRole = null;
     currentTranscriptEl = null;
   }
 }
 
 function finishCurrentTurn() {
+  flushTurnLog();
   currentTurnRole = null;
   currentTranscriptEl = null;
 }
@@ -334,7 +355,10 @@ function connectSocket() {
       }
 
       playServerPcmFrame(event.data);
-      addLog(`Model audio frame received (${bytes} bytes PCM).`, "audio");
+      // Log milestone audio frames instead of spamming 25-30 lines every second
+      if (totalPacketsReceived === 1 || totalPacketsReceived % 50 === 0) {
+        addLog(`Streaming model audio (${totalPacketsReceived} packets received)...`, "audio");
+      }
     } else if (typeof event.data === "string") {
       let payload;
       try {
@@ -364,7 +388,6 @@ function connectSocket() {
         }
       } else if (payload.type === "transcript") {
         handleLiveTranscript(payload.role || "agent", payload.text || "", payload.is_final);
-        addLog(`${payload.role === "user" ? "You" : "Agent"}: ${payload.text}`, "server");
       } else if (payload.type === "turn_complete") {
         finishCurrentTurn();
         addLog("Turn complete.", "system");
