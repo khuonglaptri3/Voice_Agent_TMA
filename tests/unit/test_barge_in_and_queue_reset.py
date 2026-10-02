@@ -1,4 +1,4 @@
-"""Unit tests for Dev A Day 4: Barge-in Interruption, Queue Draining, and Fast Server Dispatch.
+"""Unit tests for Barge-in Interruption, Live Queue Reset, and Audio Suppression (Day 4).
 
 All tests run offline using mocks to verify:
 1. LiveRequestQueue draining on interruption.
