@@ -97,20 +97,28 @@ sequenceDiagram
 
     Note over User,GEMINI: ── PHA 2: THỰC THI CÔNG CỤ (MID-SPEECH TOOLING) ──
     User->>UI: Hỏi: "Bây giờ là mấy giờ và phòng Lab A có trống không?"
-    UI->>GW->>ORCH->>GEMINI: Stream Audio yêu cầu
+    UI->>GW: Gửi PCM Audio yêu cầu
+    GW->>ORCH: Đẩy vào LiveRequestQueue
+    ORCH->>GEMINI: Stream Audio tới Gemini Live
     GEMINI-->>ORCH: ADK Tool Call: check_meeting_room("Lab A")
-    ORCH-->>GW-->>UI: JSON {"type":"tool_event", "status":"executing"} (Badge UI sáng)
+    ORCH-->>GW: Gửi sự kiện tool_event (status: executing)
+    GW-->>UI: JSON {"type":"tool_event"} (Badge UI sáng)
     ORCH->>ORCH: Thực thi hàm check_meeting_room (~17ms)
     ORCH-->>GEMINI: Trả về Tool Output: {"room": "Lab A", "status": "available"}
-    GEMINI-->>ORCH-->>GW-->>UI: Audio giải đáp: "Dạ hiện tại phòng Lab A đang trống ạ!"
+    GEMINI-->>ORCH: Trả về Audio giải đáp (24kHz PCM)
+    ORCH-->>GW: Forward Audio Stream
+    GW-->>UI: Binary Audio ra loa
+    UI-->>User: Loa phát: "Dạ hiện tại phòng Lab A đang trống ạ!"
 
     Note over User,GEMINI: ── PHA 3: NGẮT LỜI KHẨN CẤP (BARGE-IN INTERRUPTION) ──
     Note over UI: Trợ lý đang phát âm thanh dở dang...
     User->>UI: Người dùng chen ngang: "Đợi một chút, đổi sang phòng 102 đi!"
     UI->>GW: Nhận frame âm thanh mới của User
+    GW->>ORCH: Forward audio frame
     ORCH->>GEMINI: Phát hiện User Voice Activity
     GEMINI-->>ORCH: Tín hiệu Interrupted Event
-    ORCH-->>GW-->>UI: JSON {"type":"interrupted", "reason":"user_barge_in"}
+    ORCH-->>GW: Báo sự kiện bị ngắt lời
+    GW-->>UI: JSON {"type":"interrupted", "reason":"user_barge_in"}
     Note over UI: reset_audio_queue() lập tức dọn sạch bộ đệm loa (< 50ms)
     UI-->>User: Loa im bặt ngay lập tức, chuyển sang lắng nghe yêu cầu mới
 ```
@@ -175,16 +183,6 @@ Số liệu được trích xuất trực tiếp từ kết quả chạy benchma
 | **Tool Execution Overhead**                    |  **0.0 ms**  |  **17.1 ms**  |      19.6 ms      | 8.1 ms (khi có tool) |    20.1 ms    |   Không làm trễ stream   |
 | **Barge-in Reaction Time (Client Cutoff)**     |  **< 50 ms**  |  **< 80 ms**  |      < 120 ms      |        25.0 ms        |    150.0 ms    |   Cắt âm thanh tức thì   |
 | **Network Transit RTT (WebSocket)**            |  **35.0 ms**  |  **55.0 ms**  |      70.0 ms      |        20.0 ms        |    85.0 ms    |  Mượt mà trên LAN/Cloud  |
-
-### So Sánh: Native S2S vs Kiến Trúc Tuần Tự (Cascading ASR $\rightarrow$ LLM $\rightarrow$ TTS)
-
-| Đặc tính kỹ thuật                      |                    Mô hình Tuần Tự (Cascading Pipeline)                    |           PoC TMA Native S2S (Gemini Live)           |            Mức độ cải thiện            |
-| :------------------------------------------ | :-----------------------------------------------------------------------------: | :--------------------------------------------------: | :-----------------------------------------: |
-| **Tổng độ trễ phản hồi (TTFA)** | $1.500\text{ms} - 2.500\text{ms}$ | **$315\text{ms} - 505\text{ms}$** |          **Nhanh hơn 300% - 500%**          |                                            |
-| **Kênh truyền âm thanh**           |                          Nửa song công (Half-Duplex)                          |    **Song công toàn phần (Full-Duplex)**    |      Tương tác tự nhiên 2 chiều      |
-| **Cơ chế ngắt lời (Barge-in)**    |                Khó khăn, trễ$500\text{ms} - 1.000\text{ms}$                |  **Tức thời (< 200ms E2E, < 50ms client)**  |     Triệt tiêu buffer ngay lập tức     |
-| **Cảm xúc & Ngữ điệu**           |                         Giọng đọc máy móc từ text                         | **Biểu cảm gốc theo âm sắc người nói** |  Tự nhiên, nhận diện tiếng Việt tốt  |
-| **Chi phí hạ tầng**                |                 Duy trì 3 server riêng biệt (ASR, LLM, TTS)                 |    **1 kết nối trực tiếp thống nhất**    | Đơn giản hóa kiến trúc và vận hành |
 
 ---
 
