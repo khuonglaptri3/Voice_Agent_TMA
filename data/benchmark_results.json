@@ -1,0 +1,260 @@
+{
+  "generated_at": "2026-10-02T04:56:08Z",
+  "metadata": {
+    "benchmark_mode": "simulation",
+    "total_duration_sec": 33.4,
+    "total_turns": 20,
+    "vietnamese_turns": 10,
+    "english_turns": 10,
+    "model": "gemini-2.5-flash-native-audio-latest"
+  },
+  "summary": {
+    "ttfa": {
+      "count": 20,
+      "p50": 406.31,
+      "p90": 505.22,
+      "p99": 522.49,
+      "mean": 414.37,
+      "min": 315.62,
+      "max": 525.18
+    },
+    "server_turnaround": {
+      "count": 20,
+      "p50": 1627.82,
+      "p90": 2044.12,
+      "p99": 2149.98,
+      "mean": 1664.69,
+      "min": 1210.83,
+      "max": 2172.07
+    },
+    "tool_execution": {
+      "count": 20,
+      "p50": 0.0,
+      "p90": 17.14,
+      "p99": 19.57,
+      "mean": 5.62,
+      "min": 0.0,
+      "max": 20.06
+    },
+    "total_turns": 20,
+    "active_turns": 0
+  },
+  "turns": [
+    {
+      "turn_id": "bench_turn_01_VI_01",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 414.7,
+      "server_turnaround_ms": 1241.92,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916936.23799
+    },
+    {
+      "turn_id": "bench_turn_02_VI_02",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 425.93,
+      "server_turnaround_ms": 1964.81,
+      "tool_execution_ms": 11.85,
+      "tool_names": [
+        "get_current_time"
+      ],
+      "is_interrupted": false,
+      "timestamp": 1790916938.2083302
+    },
+    {
+      "turn_id": "bench_turn_03_VI_03",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 525.18,
+      "server_turnaround_ms": 1413.2,
+      "tool_execution_ms": 17.47,
+      "tool_names": [
+        "check_meeting_room"
+      ],
+      "is_interrupted": false,
+      "timestamp": 1790916939.6269853
+    },
+    {
+      "turn_id": "bench_turn_04_VI_04",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 378.68,
+      "server_turnaround_ms": 1210.83,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916940.8430722
+    },
+    {
+      "turn_id": "bench_turn_05_VI_05",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 345.47,
+      "server_turnaround_ms": 1652.49,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916942.5010638
+    },
+    {
+      "turn_id": "bench_turn_06_VI_06",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 315.62,
+      "server_turnaround_ms": 1315.91,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916943.822466
+    },
+    {
+      "turn_id": "bench_turn_07_VI_07",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 477.01,
+      "server_turnaround_ms": 1500.38,
+      "tool_execution_ms": 17.1,
+      "tool_names": [
+        "check_meeting_room"
+      ],
+      "is_interrupted": false,
+      "timestamp": 1790916945.3283622
+    },
+    {
+      "turn_id": "bench_turn_08_VI_08",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 405.76,
+      "server_turnaround_ms": 2017.12,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916947.3510106
+    },
+    {
+      "turn_id": "bench_turn_09_VI_09",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 504.58,
+      "server_turnaround_ms": 2004.59,
+      "tool_execution_ms": 8.09,
+      "tool_names": [
+        "get_current_time"
+      ],
+      "is_interrupted": false,
+      "timestamp": 1790916949.3610435
+    },
+    {
+      "turn_id": "bench_turn_10_VI_10",
+      "session_id": "benchmark_session_vi",
+      "ttfa_ms": 365.66,
+      "server_turnaround_ms": 1323.91,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916950.690387
+    },
+    {
+      "turn_id": "bench_turn_11_EN_01",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 464.75,
+      "server_turnaround_ms": 1603.14,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916952.2989957
+    },
+    {
+      "turn_id": "bench_turn_12_EN_02",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 405.0,
+      "server_turnaround_ms": 2055.83,
+      "tool_execution_ms": 9.3,
+      "tool_names": [
+        "get_current_time"
+      ],
+      "is_interrupted": false,
+      "timestamp": 1790916954.360063
+    },
+    {
+      "turn_id": "bench_turn_13_EN_03",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 511.0,
+      "server_turnaround_ms": 2042.82,
+      "tool_execution_ms": 16.45,
+      "tool_names": [
+        "check_meeting_room"
+      ],
+      "is_interrupted": false,
+      "timestamp": 1790916956.408445
+    },
+    {
+      "turn_id": "bench_turn_14_EN_04",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 396.66,
+      "server_turnaround_ms": 2172.07,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916958.5860462
+    },
+    {
+      "turn_id": "bench_turn_15_EN_05",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 371.62,
+      "server_turnaround_ms": 1725.46,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916960.3169844
+    },
+    {
+      "turn_id": "bench_turn_16_EN_06",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 443.74,
+      "server_turnaround_ms": 1864.49,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916962.1869473
+    },
+    {
+      "turn_id": "bench_turn_17_EN_07",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 483.03,
+      "server_turnaround_ms": 1989.83,
+      "tool_execution_ms": 20.06,
+      "tool_names": [
+        "check_meeting_room"
+      ],
+      "is_interrupted": false,
+      "timestamp": 1790916964.182194
+    },
+    {
+      "turn_id": "bench_turn_18_EN_08",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 318.42,
+      "server_turnaround_ms": 1347.69,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916965.5353124
+    },
+    {
+      "turn_id": "bench_turn_19_EN_09",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 406.87,
+      "server_turnaround_ms": 1440.2,
+      "tool_execution_ms": 12.05,
+      "tool_names": [
+        "get_current_time"
+      ],
+      "is_interrupted": false,
+      "timestamp": 1790916966.981002
+    },
+    {
+      "turn_id": "bench_turn_20_EN_10",
+      "session_id": "benchmark_session_en",
+      "ttfa_ms": 327.64,
+      "server_turnaround_ms": 1407.02,
+      "tool_execution_ms": 0.0,
+      "tool_names": [],
+      "is_interrupted": false,
+      "timestamp": 1790916968.3933578
+    }
+  ]
+}
