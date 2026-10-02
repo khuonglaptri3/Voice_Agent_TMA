@@ -184,16 +184,6 @@ Số liệu được trích xuất trực tiếp từ kết quả chạy benchma
 | **Barge-in Reaction Time (Client Cutoff)**     |  **< 50 ms**  |  **< 80 ms**  |      < 120 ms      |        25.0 ms        |    150.0 ms    |   Cắt âm thanh tức thì   |
 | **Network Transit RTT (WebSocket)**            |  **35.0 ms**  |  **55.0 ms**  |      70.0 ms      |        20.0 ms        |    85.0 ms    |  Mượt mà trên LAN/Cloud  |
 
-### So Sánh: Native S2S vs Kiến Trúc Tuần Tự (Cascading ASR $\rightarrow$ LLM $\rightarrow$ TTS)
-
-| Đặc tính kỹ thuật                      |                    Mô hình Tuần Tự (Cascading Pipeline)                    |           PoC TMA Native S2S (Gemini Live)           |            Mức độ cải thiện            |
-| :------------------------------------------ | :-----------------------------------------------------------------------------: | :--------------------------------------------------: | :-----------------------------------------: |
-| **Tổng độ trễ phản hồi (TTFA)** | $1.500\text{ms} - 2.500\text{ms}$ | **$315\text{ms} - 505\text{ms}$** |          **Nhanh hơn 300% - 500%**          |                                            |
-| **Kênh truyền âm thanh**           |                          Nửa song công (Half-Duplex)                          |    **Song công toàn phần (Full-Duplex)**    |      Tương tác tự nhiên 2 chiều      |
-| **Cơ chế ngắt lời (Barge-in)**    |                Khó khăn, trễ$500\text{ms} - 1.000\text{ms}$                |  **Tức thời (< 200ms E2E, < 50ms client)**  |     Triệt tiêu buffer ngay lập tức     |
-| **Cảm xúc & Ngữ điệu**           |                         Giọng đọc máy móc từ text                         | **Biểu cảm gốc theo âm sắc người nói** |  Tự nhiên, nhận diện tiếng Việt tốt  |
-| **Chi phí hạ tầng**                |                 Duy trì 3 server riêng biệt (ASR, LLM, TTS)                 |    **1 kết nối trực tiếp thống nhất**    | Đơn giản hóa kiến trúc và vận hành |
-
 ---
 
 ## 5. Hướng Dẫn Cài Đặt & Khởi Chạy (Quickstart)
