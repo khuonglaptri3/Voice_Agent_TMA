@@ -80,6 +80,8 @@ class ADKLiveOrchestrator:
         voice_name: str = "Puck",
         system_instruction: Optional[str] = None,
         client: Optional[Any] = None,
+        tools: Optional[list[Any]] = None,
+        tool_registry: Optional[dict[str, Callable]] = None,
     ) -> None:
         if voice_name not in SUPPORTED_VOICES:
             raise ValueError(
@@ -90,6 +92,10 @@ class ADKLiveOrchestrator:
         self.voice_name = voice_name
         self.system_instruction = system_instruction or VoicePersona.get_persona("default")
         self._client = client
+
+        from src.tools.sample_tools import SAMPLE_TOOLS, TOOL_REGISTRY
+        self.tools = tools if tools is not None else list(SAMPLE_TOOLS)
+        self.tool_registry = tool_registry if tool_registry is not None else dict(TOOL_REGISTRY)
 
     def _get_client(self) -> Any:
         if self._client is not None:
@@ -150,24 +156,28 @@ class ADKLiveOrchestrator:
         stop_event = stop_event or asyncio.Event()
         client = self._get_client()
 
-        config = types.LiveConnectConfig(
-            response_modalities=[types.Modality.AUDIO],
-            thinking_config=types.ThinkingConfig(
+        config_kwargs: dict[str, Any] = {
+            "response_modalities": [types.Modality.AUDIO],
+            "thinking_config": types.ThinkingConfig(
                 thinking_level=types.ThinkingLevel.LOW
             ),
-            speech_config=types.SpeechConfig(
+            "speech_config": types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
                         voice_name=self.voice_name
                     )
                 )
             ),
-            input_audio_transcription=types.AudioTranscriptionConfig(),
-            output_audio_transcription=types.AudioTranscriptionConfig(),
-            system_instruction=types.Content(
+            "input_audio_transcription": types.AudioTranscriptionConfig(),
+            "output_audio_transcription": types.AudioTranscriptionConfig(),
+            "system_instruction": types.Content(
                 parts=[types.Part.from_text(text=self.system_instruction)]
             ),
-        )
+        }
+        if self.tools:
+            config_kwargs["tools"] = self.tools
+
+        config = types.LiveConnectConfig(**config_kwargs)
 
         async with client.aio.live.connect(model=self.model, config=config) as session:
             logger.info("Connected to Gemini Live session successfully.")
@@ -209,6 +219,93 @@ class ADKLiveOrchestrator:
                     async for response in session.receive():
                         if stop_event.is_set():
                             break
+
+                        # 0. Handle Mid-Speech Tool Calling (Day 5 - Dev A)
+                        tool_call = getattr(response, "tool_call", None)
+                        if tool_call and getattr(tool_call, "function_calls", None):
+                            for call in tool_call.function_calls:
+                                call_name = getattr(call, "name", "")
+                                call_id = getattr(call, "id", "")
+                                call_args = getattr(call, "args", {}) or {}
+
+                                # Notify client: tool status "executing"
+                                await self._safe_dispatch(
+                                    event_out_callback,
+                                    "tool_event",
+                                    {
+                                        "type": "tool_event",
+                                        "tool_name": call_name,
+                                        "status": "executing",
+                                        "params": call_args,
+                                        "call_id": call_id,
+                                        "timestamp_ms": int(time.time() * 1000),
+                                    },
+                                )
+
+                                # Execute registered tool
+                                t_tool_start = time.perf_counter()
+                                fn = self.tool_registry.get(call_name)
+                                if fn is not None:
+                                    try:
+                                        if inspect.iscoroutinefunction(fn):
+                                            result = await fn(**call_args)
+                                        else:
+                                            result = fn(**call_args)
+                                    except Exception as tool_exc:
+                                        logger.error(f"Error executing tool '{call_name}': {tool_exc}", exc_info=True)
+                                        result = {"error": str(tool_exc)}
+                                else:
+                                    logger.warning(f"Tool '{call_name}' not found in registry.")
+                                    result = {"error": f"Tool '{call_name}' not registered."}
+
+                                exec_time_ms = (time.perf_counter() - t_tool_start) * 1000
+
+                                # Send tool response back to Gemini Live
+                                try:
+                                    tool_resp_payload = result if isinstance(result, dict) else {"output": result}
+                                    await session.send_tool_response(
+                                        function_responses=[
+                                            types.FunctionResponse(
+                                                id=call_id,
+                                                name=call_name,
+                                                response=tool_resp_payload,
+                                            )
+                                        ]
+                                    )
+                                except Exception as send_tool_exc:
+                                    logger.error(f"Error sending tool response to Gemini: {send_tool_exc}", exc_info=True)
+
+                                # Notify client: tool status "done"
+                                await self._safe_dispatch(
+                                    event_out_callback,
+                                    "tool_event",
+                                    {
+                                        "type": "tool_event",
+                                        "tool_name": call_name,
+                                        "status": "done",
+                                        "result": result,
+                                        "execution_time_ms": round(exec_time_ms, 2),
+                                        "call_id": call_id,
+                                        "timestamp_ms": int(time.time() * 1000),
+                                    },
+                                )
+                            continue
+
+                        # Handle Tool Call Cancellation (if user barged in during tool call)
+                        tool_call_cancellation = getattr(response, "tool_call_cancellation", None)
+                        if tool_call_cancellation:
+                            cancelled_ids = getattr(tool_call_cancellation, "ids", [])
+                            await self._safe_dispatch(
+                                event_out_callback,
+                                "tool_event",
+                                {
+                                    "type": "tool_event",
+                                    "status": "cancelled",
+                                    "ids": cancelled_ids,
+                                    "timestamp_ms": int(time.time() * 1000),
+                                },
+                            )
+                            continue
 
                         server_content = getattr(response, "server_content", None)
                         if not server_content:
