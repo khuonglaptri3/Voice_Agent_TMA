@@ -8,11 +8,12 @@ import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from src.orchestration.engine.turn_orchestrator import ADKLiveOrchestrator, TurnOrchestrator
+
 
 @pytest.mark.asyncio
 async def test_orchestrator_initialization():
     """Verify that ADKLiveOrchestrator initializes with proper defaults."""
-    from src.orchestration.engine.turn_orchestrator import ADKLiveOrchestrator
 
     orchestrator = ADKLiveOrchestrator(
         api_key="mock-api-key",
@@ -94,6 +95,30 @@ async def test_orchestrator_processes_10_audio_chunks():
     assert live_config.thinking_config.thinking_level.value == "LOW"
 
 
+class FakePart:
+    def __init__(self, text=None, inline_data=None):
+        self.text = text
+        self.inline_data = inline_data
+
+
+class FakeInlineData:
+    def __init__(self, data):
+        self.data = data
+
+
+class FakeServerContent:
+    def __init__(self, model_turn=None, input_transcription=None, interrupted=False, turn_complete=False):
+        self.model_turn = model_turn
+        self.input_transcription = input_transcription
+        self.interrupted = interrupted
+        self.turn_complete = turn_complete
+
+
+class FakeResponse:
+    def __init__(self, server_content):
+        self.server_content = server_content
+
+
 @pytest.mark.asyncio
 async def test_orchestrator_dispatches_audio_and_transcripts_to_callback():
     """Verify that incoming model audio and transcripts trigger event_out_callback."""
@@ -101,27 +126,6 @@ async def test_orchestrator_dispatches_audio_and_transcripts_to_callback():
 
     # Prepare fake responses
     fake_model_audio = b"\x01\x02\x03\x04" * 256
-    
-    # Fake response object structure matching Gemini Live API
-    class FakePart:
-        def __init__(self, text=None, inline_data=None):
-            self.text = text
-            self.inline_data = inline_data
-
-    class FakeInlineData:
-        def __init__(self, data):
-            self.data = data
-
-    class FakeServerContent:
-        def __init__(self, model_turn=None, input_transcription=None, interrupted=False, turn_complete=False):
-            self.model_turn = model_turn
-            self.input_transcription = input_transcription
-            self.interrupted = interrupted
-            self.turn_complete = turn_complete
-
-    class FakeResponse:
-        def __init__(self, server_content):
-            self.server_content = server_content
 
     # Sequence of fake responses
     responses = [
@@ -215,3 +219,81 @@ async def test_turn_orchestrator_backward_compatibility():
     """Verify that TurnOrchestrator alias is available and inherits from ADKLiveOrchestrator."""
     from src.orchestration.engine.turn_orchestrator import TurnOrchestrator, ADKLiveOrchestrator
     assert issubclass(TurnOrchestrator, ADKLiveOrchestrator)
+
+
+@pytest.mark.asyncio
+async def test_multi_turn_live_session_does_not_close_after_first_turn_complete():
+    """Verify that turn_complete does not terminate the live session for subsequent conversation turns."""
+    turn1_audio = b"\x01\x01" * 128
+    turn2_audio = b"\x02\x02" * 128
+
+    responses = [
+        # Turn 1
+        FakeResponse(
+            server_content=FakeServerContent(
+                model_turn=MagicMock(parts=[FakePart(text="Turn 1", inline_data=FakeInlineData(turn1_audio))]),
+            )
+        ),
+        FakeResponse(server_content=FakeServerContent(turn_complete=True)),
+        # Turn 2 (arriving after turn 1 complete)
+        FakeResponse(
+            server_content=FakeServerContent(
+                model_turn=MagicMock(parts=[FakePart(text="Turn 2", inline_data=FakeInlineData(turn2_audio))]),
+            )
+        ),
+        FakeResponse(server_content=FakeServerContent(turn_complete=True)),
+    ]
+
+    class RealGenAiLikeSession:
+        __module__ = "google.genai.live"
+
+        def __init__(self, items):
+            self.items = list(items)
+
+        async def _receive(self):
+            if self.items:
+                await asyncio.sleep(0.01)
+                return self.items.pop(0)
+            await asyncio.sleep(0.5)
+            return None
+
+        async def send_realtime_input(self, media):
+            pass
+
+    mock_session = RealGenAiLikeSession(responses)
+    fake_client = MagicMock()
+    fake_connect_cm = AsyncMock()
+    fake_connect_cm.__aenter__.return_value = mock_session
+    fake_client.aio.live.connect.return_value = fake_connect_cm
+
+    orchestrator = ADKLiveOrchestrator(api_key="mock-key", client=fake_client)
+    audio_in_queue = asyncio.Queue()
+    stop_event = asyncio.Event()
+    received_audio = []
+    received_transcripts = []
+
+    async def callback(event_type: str, payload):
+        if event_type == "audio":
+            received_audio.append(payload)
+        elif event_type == "transcript" and payload.get("role") == "agent":
+            received_transcripts.append(payload["text"])
+
+    session_task = asyncio.create_task(
+        orchestrator.start_live_session(
+            audio_in_queue=audio_in_queue,
+            event_out_callback=callback,
+            stop_event=stop_event,
+        )
+    )
+
+    await asyncio.sleep(0.12)
+    stop_event.set()
+    await asyncio.wait_for(session_task, timeout=1.0)
+
+    # Both Turn 1 and Turn 2 must be dispatched successfully
+    assert len(received_audio) == 2
+    assert received_audio[0] == turn1_audio
+    assert received_audio[1] == turn2_audio
+    assert "Turn 1" in received_transcripts
+    assert "Turn 2" in received_transcripts
+

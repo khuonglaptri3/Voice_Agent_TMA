@@ -220,11 +220,38 @@ class ADKLiveOrchestrator:
                             logger.error(f"Error sending audio to Gemini Live: {exc}", exc_info=True)
                             await asyncio.sleep(0.02)
 
+            async def _iter_session_messages():
+                """Continuously stream messages from Gemini Live across all conversation turns.
+
+                In the Google GenAI SDK, `session.receive()` internally breaks upon interaction
+                completion (turn_complete). For full-duplex conversations, calling `session._receive()`
+                directly keeps the WebSocket listening continuously across subsequent conversation turns.
+                """
+                mod = getattr(type(session), "__module__", "")
+                if mod.startswith("google.genai") and hasattr(session, "_receive"):
+                    while not stop_event.is_set():
+                        try:
+                            msg = await session._receive()
+                            if msg is None:
+                                break
+                            yield msg
+                        except asyncio.CancelledError:
+                            break
+                        except Exception as recv_exc:
+                            if not stop_event.is_set():
+                                logger.error(f"Error receiving from Gemini Live session: {recv_exc}", exc_info=True)
+                            break
+                else:
+                    async for response in session.receive():
+                        if stop_event.is_set():
+                            break
+                        yield response
+
             async def receive_events_worker():
                 """Listen for server responses: audio chunks, transcripts, and barge-in."""
                 nonlocal is_interrupted
                 try:
-                    async for response in session.receive():
+                    async for response in _iter_session_messages():
                         if stop_event.is_set():
                             break
 
