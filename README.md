@@ -97,20 +97,28 @@ sequenceDiagram
 
     Note over User,GEMINI: ── PHA 2: THỰC THI CÔNG CỤ (MID-SPEECH TOOLING) ──
     User->>UI: Hỏi: "Bây giờ là mấy giờ và phòng Lab A có trống không?"
-    UI->>GW->>ORCH->>GEMINI: Stream Audio yêu cầu
+    UI->>GW: Gửi PCM Audio yêu cầu
+    GW->>ORCH: Đẩy vào LiveRequestQueue
+    ORCH->>GEMINI: Stream Audio tới Gemini Live
     GEMINI-->>ORCH: ADK Tool Call: check_meeting_room("Lab A")
-    ORCH-->>GW-->>UI: JSON {"type":"tool_event", "status":"executing"} (Badge UI sáng)
+    ORCH-->>GW: Gửi sự kiện tool_event (status: executing)
+    GW-->>UI: JSON {"type":"tool_event"} (Badge UI sáng)
     ORCH->>ORCH: Thực thi hàm check_meeting_room (~17ms)
     ORCH-->>GEMINI: Trả về Tool Output: {"room": "Lab A", "status": "available"}
-    GEMINI-->>ORCH-->>GW-->>UI: Audio giải đáp: "Dạ hiện tại phòng Lab A đang trống ạ!"
+    GEMINI-->>ORCH: Trả về Audio giải đáp (24kHz PCM)
+    ORCH-->>GW: Forward Audio Stream
+    GW-->>UI: Binary Audio ra loa
+    UI-->>User: Loa phát: "Dạ hiện tại phòng Lab A đang trống ạ!"
 
     Note over User,GEMINI: ── PHA 3: NGẮT LỜI KHẨN CẤP (BARGE-IN INTERRUPTION) ──
     Note over UI: Trợ lý đang phát âm thanh dở dang...
     User->>UI: Người dùng chen ngang: "Đợi một chút, đổi sang phòng 102 đi!"
     UI->>GW: Nhận frame âm thanh mới của User
+    GW->>ORCH: Forward audio frame
     ORCH->>GEMINI: Phát hiện User Voice Activity
     GEMINI-->>ORCH: Tín hiệu Interrupted Event
-    ORCH-->>GW-->>UI: JSON {"type":"interrupted", "reason":"user_barge_in"}
+    ORCH-->>GW: Báo sự kiện bị ngắt lời
+    GW-->>UI: JSON {"type":"interrupted", "reason":"user_barge_in"}
     Note over UI: reset_audio_queue() lập tức dọn sạch bộ đệm loa (< 50ms)
     UI-->>User: Loa im bặt ngay lập tức, chuyển sang lắng nghe yêu cầu mới
 ```
