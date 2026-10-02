@@ -421,15 +421,16 @@ flowchart TD
 
 * **Buổi sáng (08:30 - 12:00):**
   - Lập trình đo độ trễ đầu cuối (End-to-End Latency) trực tiếp trong `web/app.js`:
-    - Đo thời gian từ lúc micro dừng thu âm đến khi loa phát tiếng đầu tiên.
-    - Đo thời gian ngắt lời (Barge-in Reaction Time) từ lúc user nói đến khi loa im bặt.
-    - Hiển thị trực tiếp các chỉ số này lên góc màn hình giao diện Web Test.
+    - Đo thời gian từ lúc micro dừng thu âm đến khi loa phát tiếng đầu tiên ($T_2 - T_0$).
+    - Đo thời gian ngắt lời (Barge-in Reaction Time) từ lúc user nói đến khi loa im bặt ($< 250\text{ms}$).
+    - Kết hợp sự kiện `latency_metric` từ server để tính toán độ trễ đường truyền mạng (Network Transit RTT).
+    - Hiển thị trực tiếp các chỉ số này lên màn hình Latency HUD (kèm phân vị P50/P90/P99) trên giao diện Web Studio.
 * **Buổi chiều (13:30 - 17:30):**
-  - Thu âm và lưu lại 5 file ghi âm mẫu các trường hợp:
-    - Ca thành công: Đàm thoại trôi chảy, phản xạ nhanh.
-    - Ca ngắt lời: Người dùng ngắt lời thành công.
-    - Ca gọi công cụ: Tra cứu giờ và phòng họp.
-* **Tiêu chí nghiệm thu (DoD Dev B):** Giao diện web hiển thị đồng hồ đo độ trễ theo thời gian thực cho từng lượt nói.
+  - Phát triển tính năng Ghi âm phiên thoại thời gian thực (Full-Duplex Session Audio Recorder) và Xuất tệp WAV trực tiếp trên Web Studio:
+    - Thu âm song công đồng thời luồng Micro người dùng (16kHz PCM) và luồng Loa phản hồi của AI (24kHz downsample về 16kHz).
+    - Mã hóa trực tiếp tệp chuẩn RIFF WAVE 16-bit PCM 16kHz Mono ngay trên trình duyệt.
+    - Phục vụ người dùng tự kiểm thử thủ công trực tiếp 5 ca kịch bản đàm thoại (tiếng Việt, tiếng Anh, ngắt lời barge-in, gọi tool xem giờ, gọi tool phòng họp) trên Web Studio và chủ động tải về bản ghi âm thực tế khi cần.
+* **Tiêu chí nghiệm thu (DoD Dev B):** Giao diện web hiển thị màn hình đo độ trễ theo thời gian thực (E2E TTFA, Server TTFA, Network Transit RTT, Barge-in Reaction Time, P50/P90/P99) cho từng lượt nói, đồng thời tích hợp đầy đủ công cụ ghi âm và xuất tệp WAV phiên thoại phục vụ kiểm thử thủ công.
 
 #### Buổi Sync Cuối Ngày 6 (17:30 - 18:00)
 
