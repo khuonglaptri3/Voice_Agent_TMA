@@ -146,8 +146,6 @@ gantt
     Ngày 7: Đúc Kết Báo Cáo Nghiên Cứu & Demo        :2026-10-06, 1d
 ```
 
-
-
 ---
 
 ### Ngày 1: Thiết Lập Môi Trường & Script S2S Hello-World

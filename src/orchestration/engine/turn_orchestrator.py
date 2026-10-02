@@ -97,6 +97,22 @@ class ADKLiveOrchestrator:
         from google import genai
         return genai.Client(api_key=self.api_key)
 
+    @staticmethod
+    def reset_audio_queue(queue: asyncio.Queue) -> int:
+        """Drain and clear all pending audio chunks in the input queue upon interruption."""
+        drained = 0
+        while not queue.empty():
+            try:
+                queue.get_nowait()
+                try:
+                    queue.task_done()
+                except ValueError:
+                    pass
+                drained += 1
+            except asyncio.QueueEmpty:
+                break
+        return drained
+
     def create_live_request_queue(self) -> asyncio.Queue:
         """Create an asynchronous queue for incoming audio chunks."""
         return asyncio.Queue()
@@ -188,6 +204,7 @@ class ADKLiveOrchestrator:
 
             async def receive_events_worker():
                 """Listen for server responses: audio chunks, transcripts, and barge-in."""
+                is_interrupted = False
                 try:
                     async for response in session.receive():
                         if stop_event.is_set():
@@ -197,22 +214,33 @@ class ADKLiveOrchestrator:
                         if not server_content:
                             continue
 
-                        # 1. Handle Barge-in Interruption
+                        # 1. Handle Barge-in Interruption (Day 4 - Dev A)
                         if getattr(server_content, "interrupted", False):
+                            is_interrupted = True
+                            drained = self.reset_audio_queue(audio_in_queue)
+                            t0 = time.perf_counter()
+                            now_ms = int(time.time() * 1000)
                             await self._safe_dispatch(
                                 event_out_callback,
                                 "interrupted",
                                 {
                                     "type": "interrupted",
-                                    "timestamp_ms": int(time.time() * 1000),
+                                    "timestamp_ms": now_ms,
                                     "reason": "user_barge_in",
                                 },
+                            )
+                            dispatch_latency_ms = (time.perf_counter() - t0) * 1000
+                            logger.info(
+                                "⚡ Barge-in interruption handled in %.2fms (<50ms target). Drained %d queue frames.",
+                                dispatch_latency_ms,
+                                drained,
                             )
                             continue
 
                         # 2. Handle User Transcription (Final & Interim)
                         input_transcription = getattr(server_content, "input_transcription", None)
                         if input_transcription and getattr(input_transcription, "text", None):
+                            is_interrupted = False
                             await self._safe_dispatch(
                                 event_out_callback,
                                 "transcript",
@@ -226,6 +254,7 @@ class ADKLiveOrchestrator:
 
                         interim_transcription = getattr(server_content, "interim_input_transcription", None)
                         if interim_transcription and getattr(interim_transcription, "text", None):
+                            is_interrupted = False
                             await self._safe_dispatch(
                                 event_out_callback,
                                 "transcript",
@@ -240,42 +269,47 @@ class ADKLiveOrchestrator:
                         # 3. Handle Agent Output Transcription
                         output_transcription = getattr(server_content, "output_transcription", None)
                         if output_transcription and getattr(output_transcription, "text", None):
-                            await self._safe_dispatch(
-                                event_out_callback,
-                                "transcript",
-                                {
-                                    "type": "transcript",
-                                    "role": "agent",
-                                    "text": output_transcription.text,
-                                    "is_final": getattr(output_transcription, "finished", False) or False,
-                                },
-                            )
+                            if not is_interrupted:
+                                await self._safe_dispatch(
+                                    event_out_callback,
+                                    "transcript",
+                                    {
+                                        "type": "transcript",
+                                        "role": "agent",
+                                        "text": output_transcription.text,
+                                        "is_final": getattr(output_transcription, "finished", False) or False,
+                                    },
+                                )
 
                         # 4. Handle Model Turn (Audio & Agent Text fallback)
                         model_turn = getattr(server_content, "model_turn", None)
                         if model_turn and getattr(model_turn, "parts", None):
-                            for part in model_turn.parts:
-                                if getattr(part, "text", None):
-                                    await self._safe_dispatch(
-                                        event_out_callback,
-                                        "transcript",
-                                        {
-                                            "type": "transcript",
-                                            "role": "agent",
-                                            "text": part.text,
-                                            "is_final": False,
-                                        },
-                                    )
-                                inline_data = getattr(part, "inline_data", None)
-                                if inline_data and getattr(inline_data, "data", None):
-                                    await self._safe_dispatch(
-                                        event_out_callback,
-                                        "audio",
-                                        inline_data.data,
-                                    )
+                            if is_interrupted:
+                                logger.debug("Discarding residual model turn audio/text after interruption.")
+                            else:
+                                for part in model_turn.parts:
+                                    if getattr(part, "text", None):
+                                        await self._safe_dispatch(
+                                            event_out_callback,
+                                            "transcript",
+                                            {
+                                                "type": "transcript",
+                                                "role": "agent",
+                                                "text": part.text,
+                                                "is_final": False,
+                                            },
+                                        )
+                                    inline_data = getattr(part, "inline_data", None)
+                                    if inline_data and getattr(inline_data, "data", None):
+                                        await self._safe_dispatch(
+                                            event_out_callback,
+                                            "audio",
+                                            inline_data.data,
+                                        )
 
                         # 5. Handle Turn Complete
                         if getattr(server_content, "turn_complete", False):
+                            is_interrupted = False
                             await self._safe_dispatch(
                                 event_out_callback,
                                 "turn_complete",

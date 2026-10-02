@@ -58,7 +58,7 @@ def test_barge_in_interruption_e2e_flow():
 
     received_speech = []
     mock_orchestrator.start_live_session = mock_start_live_session
-    grace_guard = GraceGuardManager(lockout_seconds=0.40, echo_energy_threshold=0.025)
+    grace_guard = GraceGuardManager(lockout_seconds=1.5, echo_energy_threshold=0.025)
 
     @app.websocket("/ws/live")
     async def ws_endpoint(ws: WebSocket):
