@@ -46,6 +46,12 @@ const packetCounterSub = document.getElementById("packet-counter-sub");
 const sampleRateSub = document.getElementById("sample-rate-sub");
 const toast = document.getElementById("toast");
 
+// Tool Activity UI (Day 5 - Dev B)
+const toolActivityBadge = document.getElementById("tool-activity-badge");
+const toolActivityIcon = document.getElementById("tool-activity-icon");
+const toolActivityText = document.getElementById("tool-activity-text");
+let toolBadgeTimeout = null;
+
 // Audio & Network State
 const TARGET_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
@@ -79,6 +85,8 @@ let totalLogEvents = 0;
 let outputAudioContext = null;
 let nextPlayTime = 0;
 const playbackSources = new Set();
+let consecutiveSpeechFrames = 0;
+let lastClientBargeInTime = 0;
 
 
 /**
@@ -239,6 +247,75 @@ function finishCurrentTurn() {
 }
 
 /**
+ * Handle Tool Calling Events (Day 5 - Dev B)
+ * Updates the animated status badge and session event log
+ */
+function handleToolEvent(payload) {
+  if (!toolActivityBadge || !payload) return;
+
+  const status = payload.status;
+  const toolName = payload.tool_name || "";
+
+  if (status === "executing") {
+    clearTimeout(toolBadgeTimeout);
+    toolActivityBadge.classList.remove("hidden", "done");
+    toolActivityBadge.classList.add("executing");
+
+    let icon = "⚙️";
+    let message = "AI đang tra cứu dữ liệu...";
+
+    if (toolName === "get_current_time") {
+      icon = "⏱️";
+      message = "Đang tra cứu giờ hệ thống...";
+    } else if (toolName === "check_meeting_room") {
+      icon = "🏢";
+      const room = payload.params?.room_name || "phòng họp";
+      message = `Đang kiểm tra ${escapeHtml(room)}...`;
+    } else if (toolName) {
+      message = `Đang thực thi ${escapeHtml(toolName)}...`;
+    }
+
+    if (toolActivityIcon) toolActivityIcon.textContent = icon;
+    if (toolActivityText) toolActivityText.textContent = message;
+
+    const paramStr = payload.params ? JSON.stringify(payload.params) : "{}";
+    addLog(`🛠️ Tool executing: ${toolName}(${paramStr})`, "system");
+  } else if (status === "done") {
+    clearTimeout(toolBadgeTimeout);
+    toolActivityBadge.classList.remove("executing");
+    toolActivityBadge.classList.add("done");
+
+    if (toolActivityIcon) toolActivityIcon.textContent = "✅";
+    const execMs = payload.execution_time_ms !== undefined ? `${payload.execution_time_ms}ms` : "";
+    if (toolActivityText) {
+      toolActivityText.textContent = `Đã tra cứu xong${execMs ? ` (${execMs})` : ""}`;
+    }
+
+    const resultStr = payload.result ? JSON.stringify(payload.result) : "{}";
+    addLog(`✅ Tool done: ${toolName} [${execMs}] => ${resultStr}`, "system");
+
+    // Smoothly fade out badge after 1.5 seconds
+    toolBadgeTimeout = setTimeout(() => {
+      resetToolBadge();
+    }, 1500);
+  } else if (status === "cancelled") {
+    resetToolBadge();
+    addLog(`⚠️ Tool execution cancelled by server/barge-in`, "system");
+  }
+}
+
+/**
+ * Reset and hide tool activity badge immediately
+ */
+function resetToolBadge() {
+  clearTimeout(toolBadgeTimeout);
+  if (toolActivityBadge) {
+    toolActivityBadge.classList.add("hidden");
+    toolActivityBadge.classList.remove("done", "executing");
+  }
+}
+
+/**
  * Audio Playback Buffer Truncation (Day 4 - Dev B)
  * Immediately stop active playing audio nodes, flush pending queue,
  * and reset scheduled playback timeline.
@@ -264,6 +341,9 @@ function truncatePlayback(reason = "interrupted") {
 
   // 4. Close current subtitle bubble
   finishCurrentTurn();
+
+  // 5. Reset tool activity badge if active (Day 5 - Dev B)
+  resetToolBadge();
 }
 
 /**
@@ -388,6 +468,8 @@ function connectSocket() {
         }
       } else if (payload.type === "transcript") {
         handleLiveTranscript(payload.role || "agent", payload.text || "", payload.is_final);
+      } else if (payload.type === "tool_event") {
+        handleToolEvent(payload);
       } else if (payload.type === "turn_complete") {
         finishCurrentTurn();
         addLog("Turn complete.", "system");
@@ -597,10 +679,18 @@ function renderVisualizer() {
 
   // Fast Barge-in Client Preemption (Day 4 - Dev B):
   // If Agent audio is actively playing through speakers and user starts speaking intentionally
-  // (peak amplitude > 0.22, ~ -13 dB), preemptively cut speaker playback immediately (< 50ms)
-  if (playbackSources.size > 0 && peak > 0.22) {
-    truncatePlayback("client_barge_in_preempt");
-    addLog("⚡ Client VAD: Intentional user speech detected during playback -> Truncating speaker audio immediately.", "system");
+  // (sustained peak amplitude > 0.32), preemptively cut speaker playback (< 50ms)
+  if (playbackSources.size > 0 && peak > 0.32) {
+    consecutiveSpeechFrames += 1;
+    const now = Date.now();
+    if (consecutiveSpeechFrames >= 3 && now - lastClientBargeInTime > 1500) {
+      lastClientBargeInTime = now;
+      consecutiveSpeechFrames = 0;
+      truncatePlayback("client_barge_in_preempt");
+      addLog("⚡ Client VAD: Intentional user speech detected during playback -> Truncating speaker audio immediately.", "system");
+    }
+  } else {
+    consecutiveSpeechFrames = 0;
   }
 
   animationFrameId = requestAnimationFrame(renderVisualizer);
@@ -952,6 +1042,15 @@ if (clearLogBtn) clearLogBtn.addEventListener("click", clearLog);
 filterButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
     setLogFilter(btn.dataset.filter);
+  });
+});
+
+// Tool Prompts Voice Chips (Day 5 - Dev B)
+document.querySelectorAll(".tool-chip").forEach((chip) => {
+  chip.addEventListener("click", () => {
+    const promptText = chip.textContent.replace(/^[\p{Emoji}\s]+/u, "").replace(/["']/g, "").trim();
+    showToast(`💡 Nói vào mic: "${promptText}"`);
+    addLog(`💡 Suggested tool query clicked: "${promptText}"`, "system");
   });
 });
 

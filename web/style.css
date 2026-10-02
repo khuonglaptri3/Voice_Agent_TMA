@@ -320,6 +320,94 @@ body {
   word-break: break-word;
 }
 
+/* ==========================================================================
+   Tool Activity Badge & Prompts (Day 5 - Dev B)
+   ========================================================================== */
+.tool-activity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  color: #a5b4fc;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+}
+
+.tool-activity-badge.executing {
+  background: rgba(139, 92, 246, 0.16);
+  border-color: rgba(167, 139, 250, 0.6);
+  color: #c4b5fd;
+  animation: toolPulseGlow 1.5s infinite alternate;
+}
+
+.tool-activity-badge.done {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(52, 211, 153, 0.4);
+  color: #6ee7b7;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.tool-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #818cf8;
+  animation: toolDotBlink 1s infinite;
+}
+
+.tool-activity-badge.done .tool-pulse-dot {
+  background: #10b981;
+  animation: none;
+}
+
+@keyframes toolPulseGlow {
+  0% { box-shadow: 0 0 6px rgba(139, 92, 246, 0.2); }
+  100% { box-shadow: 0 0 16px rgba(139, 92, 246, 0.55); }
+}
+
+@keyframes toolDotBlink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+/* Tool Prompts Suggestion Bar */
+.tool-prompts-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--border-subtle);
+  font-size: 0.78rem;
+}
+
+.tool-prompts-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.tool-chip {
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  user-select: all;
+  transition: border-color var(--transition-fast);
+}
+
+.tool-chip:hover {
+  border-color: rgba(99, 102, 241, 0.5);
+  color: var(--text-primary);
+}
+
 .hero-top {
   display: flex;
   justify-content: space-between;
