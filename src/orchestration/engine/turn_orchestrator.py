@@ -82,6 +82,7 @@ class ADKLiveOrchestrator:
         client: Optional[Any] = None,
         tools: Optional[list[Any]] = None,
         tool_registry: Optional[dict[str, Callable]] = None,
+        pipeline_tracer: Optional[Any] = None,
     ) -> None:
         if voice_name not in SUPPORTED_VOICES:
             raise ValueError(
@@ -96,6 +97,9 @@ class ADKLiveOrchestrator:
         from src.tools.sample_tools import SAMPLE_TOOLS, TOOL_REGISTRY
         self.tools = tools if tools is not None else list(SAMPLE_TOOLS)
         self.tool_registry = tool_registry if tool_registry is not None else dict(TOOL_REGISTRY)
+
+        from src.observability.tracing.pipeline_tracer import PipelineTracer, global_pipeline_tracer
+        self.pipeline_tracer = pipeline_tracer if pipeline_tracer is not None else global_pipeline_tracer
 
     def _get_client(self) -> Any:
         if self._client is not None:
@@ -250,6 +254,12 @@ class ADKLiveOrchestrator:
             async def receive_events_worker():
                 """Listen for server responses: audio chunks, transcripts, and barge-in."""
                 nonlocal is_interrupted
+                session_id = f"sess_{int(time.time() * 1000)}"
+                turn_counter = 1
+                current_turn_id = f"{session_id}_t{turn_counter}"
+                self.pipeline_tracer.start_turn(current_turn_id, session_id=session_id)
+                first_audio_in_turn = True
+
                 try:
                     async for response in _iter_session_messages():
                         if stop_event.is_set():
@@ -294,6 +304,7 @@ class ADKLiveOrchestrator:
                                     result = {"error": f"Tool '{call_name}' not registered."}
 
                                 exec_time_ms = (time.perf_counter() - t_tool_start) * 1000
+                                self.pipeline_tracer.record_tool_execution(current_turn_id, call_name, exec_time_ms)
 
                                 # Send tool response back to Gemini Live
                                 try:
@@ -349,6 +360,7 @@ class ADKLiveOrchestrator:
                         # 1. Handle Barge-in Interruption (Day 4 - Dev A)
                         if getattr(server_content, "interrupted", False):
                             is_interrupted = True
+                            self.pipeline_tracer.mark_turn_interrupted(current_turn_id)
                             drained = self.reset_audio_queue(audio_in_queue)
                             t0 = time.perf_counter()
                             now_ms = int(time.time() * 1000)
@@ -375,6 +387,7 @@ class ADKLiveOrchestrator:
                         input_transcription = getattr(server_content, "input_transcription", None)
                         if input_transcription and getattr(input_transcription, "text", None):
                             is_interrupted = False
+                            self.pipeline_tracer.mark_user_speech_end(current_turn_id)
                             await self._safe_dispatch(
                                 event_out_callback,
                                 "transcript",
@@ -436,6 +449,16 @@ class ADKLiveOrchestrator:
                                         )
                                     inline_data = getattr(part, "inline_data", None)
                                     if inline_data and getattr(inline_data, "data", None):
+                                        if first_audio_in_turn:
+                                            first_audio_in_turn = False
+                                            self.pipeline_tracer.mark_first_audio_chunk(current_turn_id)
+                                            # Dispatch TTFA latency metric immediately on first audio packet
+                                            latency_payload = self.pipeline_tracer.create_latency_metric_payload(current_turn_id)
+                                            await self._safe_dispatch(
+                                                event_out_callback,
+                                                "latency_metric",
+                                                latency_payload,
+                                            )
                                         await self._safe_dispatch(
                                             event_out_callback,
                                             "audio",
@@ -446,6 +469,23 @@ class ADKLiveOrchestrator:
                         if getattr(server_content, "turn_complete", False) or getattr(server_content, "generation_complete", False):
                             is_interrupted = False
                             if getattr(server_content, "turn_complete", False):
+                                turn_record = self.pipeline_tracer.mark_turn_complete(current_turn_id)
+                                if turn_record and turn_record.get("ttfa_ms") is not None:
+                                    # Dispatch finalized latency metric with server_turnaround_ms
+                                    final_latency_payload = {
+                                        "type": "latency_metric",
+                                        "ttfa_ms": turn_record["ttfa_ms"],
+                                        "server_turnaround_ms": turn_record.get("server_turnaround_ms") or 0.0,
+                                        "timestamp_ms": int(time.time() * 1000),
+                                    }
+                                    if turn_record.get("tool_execution_ms"):
+                                        final_latency_payload["tool_execution_ms"] = turn_record["tool_execution_ms"]
+                                    await self._safe_dispatch(
+                                        event_out_callback,
+                                        "latency_metric",
+                                        final_latency_payload,
+                                    )
+
                                 await self._safe_dispatch(
                                     event_out_callback,
                                     "turn_complete",
@@ -454,6 +494,11 @@ class ADKLiveOrchestrator:
                                         "timestamp_ms": int(time.time() * 1000),
                                     },
                                 )
+                                # Advance turn tracking
+                                turn_counter += 1
+                                current_turn_id = f"{session_id}_t{turn_counter}"
+                                self.pipeline_tracer.start_turn(current_turn_id, session_id=session_id)
+                                first_audio_in_turn = True
 
                 except asyncio.CancelledError:
                     pass

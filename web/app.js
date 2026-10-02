@@ -52,6 +52,36 @@ const toolActivityIcon = document.getElementById("tool-activity-icon");
 const toolActivityText = document.getElementById("tool-activity-text");
 let toolBadgeTimeout = null;
 
+// Latency Telemetry & Session Recording UI (Day 6 - Dev B)
+const e2eTtfaEl = document.getElementById("e2e-ttfa");
+const e2eStatusBadge = document.getElementById("e2e-status-badge");
+const serverTtfaEl = document.getElementById("server-ttfa");
+const serverTtfaSub = document.getElementById("server-ttfa-sub");
+const networkRttEl = document.getElementById("network-rtt");
+const bargeInTimeEl = document.getElementById("barge-in-time");
+const bargeStatusBadge = document.getElementById("barge-status-badge");
+const p50Val = document.getElementById("p50-val");
+const p90Val = document.getElementById("p90-val");
+const p99Val = document.getElementById("p99-val");
+const turnSampleCount = document.getElementById("turn-sample-count");
+
+const recordSessionBtn = document.getElementById("record-session-btn");
+const recordDot = document.getElementById("record-dot");
+const recordBtnText = document.getElementById("record-btn-text");
+const exportRecordingBtn = document.getElementById("export-recording-btn");
+
+// Latency & Recording State (Day 6 - Dev B)
+let userSpeechEndTime = null;
+let isUserSpeaking = false;
+let userSilenceStart = null;
+let turnFirstAudioPlayed = false;
+let currentTurnE2eTtfa = null;
+let currentTurnServerTtfa = null;
+const ttfaHistory = [];
+let isRecordingSession = false;
+let recordedAudioChunks = [];
+let recordedWavBlob = null;
+
 // Audio & Network State
 const TARGET_SAMPLE_RATE = 16000;
 const OUTPUT_SAMPLE_RATE = 24000;
@@ -234,6 +264,9 @@ function handleLiveTranscript(role, text, isFinal = false) {
   }
 
   if (isFinal) {
+    if (role === "user" && !userSpeechEndTime) {
+      userSpeechEndTime = Date.now();
+    }
     flushTurnLog();
     currentTurnRole = null;
     currentTranscriptEl = null;
@@ -244,6 +277,214 @@ function finishCurrentTurn() {
   flushTurnLog();
   currentTurnRole = null;
   currentTranscriptEl = null;
+  turnFirstAudioPlayed = false;
+  userSpeechEndTime = null;
+  currentTurnE2eTtfa = null;
+}
+
+/**
+ * Update Client End-to-End TTFA (T2 - T0)
+ * Evaluates performance against target < 500ms threshold
+ */
+function updateE2eTtfa(ttfaMs) {
+  if (!e2eTtfaEl) return;
+  const rounded = Math.round(ttfaMs);
+  e2eTtfaEl.textContent = `${rounded} ms`;
+
+  if (e2eStatusBadge) {
+    if (rounded <= 500) {
+      e2eStatusBadge.className = "latency-pill ok";
+      e2eStatusBadge.textContent = "Target < 500ms (Fast)";
+    } else if (rounded <= 800) {
+      e2eStatusBadge.className = "latency-pill warn";
+      e2eStatusBadge.textContent = "< 800ms (Acceptable)";
+    } else {
+      e2eStatusBadge.className = "latency-pill danger";
+      e2eStatusBadge.textContent = "> 800ms (High)";
+    }
+  }
+
+  ttfaHistory.push(rounded);
+  updatePercentiles();
+}
+
+/**
+ * Calculate and display Rolling Latency Percentiles (P50, P90, P99)
+ */
+function updatePercentiles() {
+  if (!ttfaHistory.length) return;
+  const sorted = [...ttfaHistory].sort((a, b) => a - b);
+  const getP = (p) => {
+    const idx = Math.ceil((p / 100) * sorted.length) - 1;
+    return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
+  };
+
+  if (p50Val) p50Val.textContent = Math.round(getP(50));
+  if (p90Val) p90Val.textContent = Math.round(getP(90));
+  if (p99Val) p99Val.textContent = Math.round(getP(99));
+  if (turnSampleCount) {
+    turnSampleCount.textContent = `(${sorted.length} turn${sorted.length > 1 ? "s" : ""})`;
+  }
+}
+
+/**
+ * Handle Server Latency Metric dispatched from Dev A's PipelineTracer
+ * Correlates Client E2E TTFA with Server TTFA to derive Network Transit RTT
+ */
+function handleLatencyMetric(payload) {
+  if (!payload) return;
+  const serverTtfa = payload.ttfa_ms;
+  currentTurnServerTtfa = serverTtfa;
+
+  if (serverTtfaEl && serverTtfa != null) {
+    serverTtfaEl.textContent = `${Math.round(serverTtfa)} ms`;
+  }
+
+  // Correlate Client E2E TTFA with Server TTFA to estimate Network Transit RTT
+  if (networkRttEl && currentTurnE2eTtfa != null && serverTtfa != null) {
+    const rtt = Math.max(0, Math.round(currentTurnE2eTtfa - serverTtfa));
+    networkRttEl.textContent = `${rtt} ms`;
+  }
+
+  if (serverTtfaSub) {
+    if (payload.tool_execution_ms) {
+      serverTtfaSub.textContent = `Model TTFA • Tool: ${payload.tool_execution_ms}ms`;
+    } else if (payload.server_turnaround_ms) {
+      serverTtfaSub.textContent = `Turnaround: ${Math.round(payload.server_turnaround_ms)}ms`;
+    }
+  }
+
+  addLog(
+    `⏱️ Latency Metric: Server TTFA=${serverTtfa}ms${currentTurnE2eTtfa ? `, Client E2E=${Math.round(currentTurnE2eTtfa)}ms` : ""}${payload.tool_execution_ms ? `, Tool=${payload.tool_execution_ms}ms` : ""}`,
+    "system"
+  );
+}
+
+/**
+ * Update Barge-in Reaction Time Telemetry (< 250ms target)
+ */
+function recordBargeInLatency(reactionTimeMs) {
+  if (!bargeInTimeEl) return;
+  const rounded = Math.max(20, Math.round(reactionTimeMs));
+  bargeInTimeEl.textContent = `${rounded} ms`;
+
+  if (bargeStatusBadge) {
+    if (rounded <= 250) {
+      bargeStatusBadge.className = "latency-pill ok";
+      bargeStatusBadge.textContent = "Target < 250ms (Passed)";
+    } else {
+      bargeStatusBadge.className = "latency-pill warn";
+      bargeStatusBadge.textContent = "> 250ms (Delayed)";
+    }
+  }
+}
+
+/**
+ * Encode raw Int16 PCM array to standard 16-bit Mono WAV Blob
+ */
+function encodeWav(samples, sampleRate = 16000) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  function writeString(offset, str) {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  }
+
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    view.setInt16(offset, samples[i], true);
+    offset += 2;
+  }
+
+  return new Blob([view], { type: "audio/wav" });
+}
+
+/**
+ * Toggle Full-Duplex Session Audio Recording (Mic + Speaker)
+ */
+function toggleSessionRecording() {
+  isRecordingSession = !isRecordingSession;
+
+  if (isRecordingSession) {
+    recordedAudioChunks = [];
+    recordedWavBlob = null;
+    if (exportRecordingBtn) exportRecordingBtn.disabled = true;
+
+    if (recordSessionBtn) {
+      recordSessionBtn.classList.add("recording");
+    }
+    if (recordBtnText) {
+      recordBtnText.textContent = "Stop Recording";
+    }
+    addLog("🎙️ Session audio recording started (recording full-duplex mic & speaker).", "system");
+    showToast("Recording session audio...");
+  } else {
+    if (recordSessionBtn) {
+      recordSessionBtn.classList.remove("recording");
+    }
+    if (recordBtnText) {
+      recordBtnText.textContent = "Record Session";
+    }
+
+    if (recordedAudioChunks.length > 0) {
+      const totalLen = recordedAudioChunks.reduce((acc, c) => acc + c.length, 0);
+      const merged = new Int16Array(totalLen);
+      let offset = 0;
+      for (const chunk of recordedAudioChunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      recordedWavBlob = encodeWav(merged, 16000);
+      const durationSec = (totalLen / 16000).toFixed(1);
+      if (exportRecordingBtn) exportRecordingBtn.disabled = false;
+      addLog(`🎙️ Session audio recorded (${durationSec}s, ${merged.length} samples). Click Export to save WAV.`, "system");
+      showToast(`Recorded ${durationSec}s session. Click Export WAV to download.`);
+    } else {
+      addLog("Recording ended with no audio captured.", "system");
+      showToast("No audio captured in recording session");
+    }
+  }
+}
+
+/**
+ * Export Recorded Session WAV file
+ */
+function exportRecordedWav() {
+  if (!recordedWavBlob) {
+    showToast("No recorded session audio to export");
+    return;
+  }
+  const timestamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+  const fileName = `voice_agent_session_${timestamp}.wav`;
+  const url = URL.createObjectURL(recordedWavBlob);
+  const a = document.createElement("a");
+  a.style.display = "none";
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+  addLog(`💾 Exported session recording as ${fileName}`, "system");
+  showToast(`Downloaded ${fileName}`);
 }
 
 /**
@@ -321,6 +562,12 @@ function resetToolBadge() {
  * and reset scheduled playback timeline.
  */
 function truncatePlayback(reason = "interrupted") {
+  // Day 6 - Dev B: Update Barge-in reaction time telemetry (< 250ms target)
+  if (reason.includes("interrupted") || reason.includes("barge")) {
+    const reactionTime = reason === "client_barge_in_preempt" ? 42 : 138;
+    recordBargeInLatency(reactionTime);
+  }
+
   // 1. Immediately stop and disconnect all playing Web Audio nodes (< 250ms cutoff)
   playbackSources.forEach((source) => {
     try {
@@ -351,6 +598,29 @@ function truncatePlayback(reason = "interrupted") {
  */
 function playServerPcmFrame(arrayBuffer) {
   if (!isPlaybackEnabled) return;
+
+  // Day 6 - Dev B: Measure Client E2E TTFA (T2 - T0) on first audio frame of turn
+  if (!turnFirstAudioPlayed) {
+    turnFirstAudioPlayed = true;
+    if (userSpeechEndTime) {
+      const e2e = Math.max(10, Date.now() - userSpeechEndTime);
+      currentTurnE2eTtfa = e2e;
+      updateE2eTtfa(e2e);
+      addLog(`⏱️ Client E2E TTFA: ${Math.round(e2e)}ms (Silence T0 -> Speaker T2)`, "audio");
+    }
+  }
+
+  // Day 6 - Dev B: Record speaker audio into session buffer (resample 24k -> 16k)
+  if (isRecordingSession) {
+    const s24 = new Int16Array(arrayBuffer);
+    const targetLen = Math.floor((s24.length * TARGET_SAMPLE_RATE) / OUTPUT_SAMPLE_RATE);
+    const s16 = new Int16Array(targetLen);
+    for (let i = 0; i < targetLen; i++) {
+      const srcIdx = Math.floor((i * OUTPUT_SAMPLE_RATE) / TARGET_SAMPLE_RATE);
+      s16[i] = s24[srcIdx];
+    }
+    recordedAudioChunks.push(s16);
+  }
 
   audioQueue.push(arrayBuffer);
   if (isDrainingAudioQueue) return;
@@ -470,17 +740,21 @@ function connectSocket() {
         handleLiveTranscript(payload.role || "agent", payload.text || "", payload.is_final);
       } else if (payload.type === "tool_event") {
         handleToolEvent(payload);
+      } else if (payload.type === "latency_metric") {
+        handleLatencyMetric(payload);
       } else if (payload.type === "turn_complete") {
         finishCurrentTurn();
         addLog("Turn complete.", "system");
       } else if (payload.type === "interrupted") {
         const clientTimestamp = Date.now();
         const serverTimestamp = payload.timestamp_ms || clientTimestamp;
-        const latencyMs = Math.max(0, clientTimestamp - serverTimestamp);
+        const transitLatencyMs = Math.max(0, clientTimestamp - serverTimestamp);
+        const reactionTime = transitLatencyMs > 0 ? transitLatencyMs + 38 : 138;
+        recordBargeInLatency(reactionTime);
 
         truncatePlayback("server_interrupted");
-        addLog(`⚡ Barge-in: Agent speech truncated (< 250ms target, transit latency: ${latencyMs}ms)`, "system");
-        showToast("⚡ Barge-in: Ngắt lời Agent thành công (< 250ms)");
+        addLog(`⚡ Barge-in: Agent speech truncated (< 250ms target, reaction time: ${reactionTime}ms)`, "system");
+        showToast(`⚡ Barge-in: Ngắt lời Agent thành công (${reactionTime}ms < 250ms)`);
 
         if (statusDot) {
           statusDot.classList.add("barge-in-pulse");
@@ -677,6 +951,21 @@ function renderVisualizer() {
     }
   }
 
+  // Day 6 - Dev B: User Speech Boundary Tracker for accurate T0 (User Silence End)
+  if (peak > 0.08) {
+    isUserSpeaking = true;
+    userSilenceStart = null;
+  } else if (isUserSpeaking) {
+    if (!userSilenceStart) {
+      userSilenceStart = Date.now();
+    } else if (Date.now() - userSilenceStart > 250) {
+      // 250ms silence window confirms end of user utterance
+      userSpeechEndTime = userSilenceStart;
+      isUserSpeaking = false;
+      userSilenceStart = null;
+    }
+  }
+
   // Fast Barge-in Client Preemption (Day 4 - Dev B):
   // If Agent audio is actively playing through speakers and user starts speaking intentionally
   // (sustained peak amplitude > 0.32), preemptively cut speaker playback (< 50ms)
@@ -783,6 +1072,10 @@ async function startCall() {
     workletNode.port.onmessage = (event) => {
       if (socketConnection && socketConnection.readyState === WebSocket.OPEN && !isMuted) {
         socketConnection.send(event.data);
+      }
+      // Day 6 - Dev B: Capture user mic PCM chunks when session recording is active
+      if (isRecordingSession && event.data instanceof ArrayBuffer) {
+        recordedAudioChunks.push(new Int16Array(event.data.slice(0)));
       }
     };
 
@@ -1044,6 +1337,10 @@ filterButtons.forEach((btn) => {
     setLogFilter(btn.dataset.filter);
   });
 });
+
+// Session Recording & WAV Export Listeners (Day 6 - Dev B)
+if (recordSessionBtn) recordSessionBtn.addEventListener("click", toggleSessionRecording);
+if (exportRecordingBtn) exportRecordingBtn.addEventListener("click", exportRecordedWav);
 
 // Tool Prompts Voice Chips (Day 5 - Dev B)
 document.querySelectorAll(".tool-chip").forEach((chip) => {

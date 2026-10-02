@@ -173,6 +173,20 @@
               <span id="playback-btn-text">Agent Audio: On</span>
             </button>
 
+            <!-- Session Recording & Export (Day 6 - Dev B) -->
+            <button id="record-session-btn" class="secondary-btn record-action-btn" aria-label="Record conversation session" title="Ghi âm phiên đàm thoại">
+              <span class="record-pulse-dot" id="record-dot"></span>
+              <span id="record-btn-text">Record Session</span>
+            </button>
+
+            <button id="export-recording-btn" class="secondary-btn icon-only" title="Xuất tệp âm thanh phiên đàm thoại (.wav)" aria-label="Export recorded session audio" disabled>
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </button>
+
             <!-- Reconnect Socket -->
             <button id="reconnect-btn" class="secondary-btn icon-only" title="Reconnect WebSocket" aria-label="Reconnect WebSocket">
               <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
@@ -182,6 +196,78 @@
                 <path d="M3 21v-5h5"/>
               </svg>
             </button>
+          </div>
+        </section>
+
+        <!-- Latency Metrics HUD (Day 6 - Dev B) -->
+        <section class="latency-hud-card" id="latency-hud" aria-label="Real-time Latency & Barge-in HUD">
+          <div class="latency-hud-header">
+            <div class="latency-title-group">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <h2>Real-time Latency & Barge-in Monitor</h2>
+            </div>
+            <div class="latency-percentiles-bar">
+              <span class="pct-item">P50: <strong id="p50-val">--</strong> ms</span>
+              <span class="pct-sep">•</span>
+              <span class="pct-item">P90: <strong id="p90-val">--</strong> ms</span>
+              <span class="pct-sep">•</span>
+              <span class="pct-item">P99: <strong id="p99-val">--</strong> ms</span>
+              <span class="pct-sep">•</span>
+              <span class="pct-sample" id="turn-sample-count">(0 turns)</span>
+            </div>
+          </div>
+
+          <div class="latency-metrics-grid">
+            <!-- Metric 1: Client E2E TTFA -->
+            <div class="telemetry-card latency-card">
+              <div class="latency-card-top">
+                <span class="telemetry-label">Client E2E TTFA</span>
+                <span id="e2e-status-badge" class="latency-pill ok">Target &lt; 500ms</span>
+              </div>
+              <div class="latency-card-body">
+                <strong id="e2e-ttfa" class="telemetry-value">-- ms</strong>
+                <span class="telemetry-sub">Silence ($T_0$) &rarr; Speaker ($T_2$)</span>
+              </div>
+            </div>
+
+            <!-- Metric 2: Server TTFA -->
+            <div class="telemetry-card latency-card">
+              <div class="latency-card-top">
+                <span class="telemetry-label">Server TTFA</span>
+                <span class="latency-pill info">Gemini Live</span>
+              </div>
+              <div class="latency-card-body">
+                <strong id="server-ttfa" class="telemetry-value">-- ms</strong>
+                <span class="telemetry-sub" id="server-ttfa-sub">Gateway &rarr; Model first chunk</span>
+              </div>
+            </div>
+
+            <!-- Metric 3: Network RTT -->
+            <div class="telemetry-card latency-card">
+              <div class="latency-card-top">
+                <span class="telemetry-label">Network Transit RTT</span>
+                <span class="latency-pill neutral">WS Overhead</span>
+              </div>
+              <div class="latency-card-body">
+                <strong id="network-rtt" class="telemetry-value">-- ms</strong>
+                <span class="telemetry-sub">E2E TTFA &minus; Server TTFA</span>
+              </div>
+            </div>
+
+            <!-- Metric 4: Barge-in Reaction Time -->
+            <div class="telemetry-card latency-card">
+              <div class="latency-card-top">
+                <span class="telemetry-label">Barge-in Reaction</span>
+                <span id="barge-status-badge" class="latency-pill ok">Target &lt; 250ms</span>
+              </div>
+              <div class="latency-card-body">
+                <strong id="barge-in-time" class="telemetry-value">-- ms</strong>
+                <span class="telemetry-sub" id="barge-in-sub">Interruption &rarr; Speaker mute</span>
+              </div>
+            </div>
           </div>
         </section>
 

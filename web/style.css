@@ -1006,6 +1006,187 @@ body {
   }
 }
 
+/* ==========================================================================
+   Day 6 - Dev B: Real-time Latency HUD, Recording & Reference Audio Samples
+   ========================================================================== */
+
+/* Recording Action Button & Pulse */
+.record-action-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--text-muted);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.record-action-btn.recording {
+  border-color: var(--status-danger);
+  color: var(--status-danger);
+  background: var(--status-danger-bg);
+}
+
+.record-action-btn.recording .record-pulse-dot {
+  background-color: var(--status-danger);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+  animation: pulseRecording 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseRecording {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+}
+
+/* Latency Metrics HUD Card */
+.latency-hud-card {
+  background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(15, 22, 36, 0.95) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.latency-hud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 10px;
+}
+
+.latency-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent-primary);
+}
+
+.latency-title-group h2 {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.latency-percentiles-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  background: var(--bg-surface-elevated);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-muted);
+}
+
+.latency-percentiles-bar strong {
+  color: var(--text-primary);
+}
+
+.pct-sep {
+  color: var(--text-muted);
+}
+
+.pct-sample {
+  color: var(--text-muted);
+}
+
+.latency-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.latency-card {
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-md);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.latency-card:hover {
+  border-color: var(--border-accent);
+  transform: translateY(-1px);
+}
+
+.latency-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.latency-pill {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.02em;
+}
+
+.latency-pill.ok {
+  background: var(--status-ok-bg);
+  color: var(--status-ok);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.latency-pill.warn {
+  background: var(--status-warn-bg);
+  color: var(--status-warn);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.latency-pill.danger {
+  background: var(--status-danger-bg);
+  color: var(--status-danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.latency-pill.info {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.latency-pill.neutral {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.latency-card-body {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 /* Accessibility: Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
