@@ -20,10 +20,12 @@ from src.serving.api.v1.chat_routes import router as chat_router
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 STATIC_DIR = BASE_DIR / "web"
+DATA_DIR = BASE_DIR / "data"
 
 app = FastAPI(title="Enterprise Agentic AI & Realtime Voice Agent")
 app.include_router(chat_router, prefix="/api/v1")
 app.mount("/web", StaticFiles(directory=str(STATIC_DIR), html=True), name="web")
+app.mount("/data", StaticFiles(directory=str(DATA_DIR)), name="data")
 
 
 @app.get("/")

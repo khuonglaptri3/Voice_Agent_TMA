@@ -173,6 +173,20 @@
               <span id="playback-btn-text">Agent Audio: On</span>
             </button>
 
+            <!-- Session Recording & Export (Day 6 - Dev B) -->
+            <button id="record-session-btn" class="secondary-btn record-action-btn" aria-label="Record conversation session" title="Ghi âm phiên đàm thoại">
+              <span class="record-pulse-dot" id="record-dot"></span>
+              <span id="record-btn-text">Record Session</span>
+            </button>
+
+            <button id="export-recording-btn" class="secondary-btn icon-only" title="Xuất tệp âm thanh phiên đàm thoại (.wav)" aria-label="Export recorded session audio" disabled>
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </button>
+
             <!-- Reconnect Socket -->
             <button id="reconnect-btn" class="secondary-btn icon-only" title="Reconnect WebSocket" aria-label="Reconnect WebSocket">
               <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
@@ -182,6 +196,78 @@
                 <path d="M3 21v-5h5"/>
               </svg>
             </button>
+          </div>
+        </section>
+
+        <!-- Latency Metrics HUD (Day 6 - Dev B) -->
+        <section class="latency-hud-card" id="latency-hud" aria-label="Real-time Latency & Barge-in HUD">
+          <div class="latency-hud-header">
+            <div class="latency-title-group">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <h2>Real-time Latency & Barge-in Monitor</h2>
+            </div>
+            <div class="latency-percentiles-bar">
+              <span class="pct-item">P50: <strong id="p50-val">--</strong> ms</span>
+              <span class="pct-sep">•</span>
+              <span class="pct-item">P90: <strong id="p90-val">--</strong> ms</span>
+              <span class="pct-sep">•</span>
+              <span class="pct-item">P99: <strong id="p99-val">--</strong> ms</span>
+              <span class="pct-sep">•</span>
+              <span class="pct-sample" id="turn-sample-count">(0 turns)</span>
+            </div>
+          </div>
+
+          <div class="latency-metrics-grid">
+            <!-- Metric 1: Client E2E TTFA -->
+            <div class="telemetry-card latency-card">
+              <div class="latency-card-top">
+                <span class="telemetry-label">Client E2E TTFA</span>
+                <span id="e2e-status-badge" class="latency-pill ok">Target &lt; 500ms</span>
+              </div>
+              <div class="latency-card-body">
+                <strong id="e2e-ttfa" class="telemetry-value">-- ms</strong>
+                <span class="telemetry-sub">Silence ($T_0$) &rarr; Speaker ($T_2$)</span>
+              </div>
+            </div>
+
+            <!-- Metric 2: Server TTFA -->
+            <div class="telemetry-card latency-card">
+              <div class="latency-card-top">
+                <span class="telemetry-label">Server TTFA</span>
+                <span class="latency-pill info">Gemini Live</span>
+              </div>
+              <div class="latency-card-body">
+                <strong id="server-ttfa" class="telemetry-value">-- ms</strong>
+                <span class="telemetry-sub" id="server-ttfa-sub">Gateway &rarr; Model first chunk</span>
+              </div>
+            </div>
+
+            <!-- Metric 3: Network RTT -->
+            <div class="telemetry-card latency-card">
+              <div class="latency-card-top">
+                <span class="telemetry-label">Network Transit RTT</span>
+                <span class="latency-pill neutral">WS Overhead</span>
+              </div>
+              <div class="latency-card-body">
+                <strong id="network-rtt" class="telemetry-value">-- ms</strong>
+                <span class="telemetry-sub">E2E TTFA &minus; Server TTFA</span>
+              </div>
+            </div>
+
+            <!-- Metric 4: Barge-in Reaction Time -->
+            <div class="telemetry-card latency-card">
+              <div class="latency-card-top">
+                <span class="telemetry-label">Barge-in Reaction</span>
+                <span id="barge-status-badge" class="latency-pill ok">Target &lt; 250ms</span>
+              </div>
+              <div class="latency-card-body">
+                <strong id="barge-in-time" class="telemetry-value">-- ms</strong>
+                <span class="telemetry-sub" id="barge-in-sub">Interruption &rarr; Speaker mute</span>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -302,6 +388,72 @@
                 <span class="log-text">Studio ready. Connects to /ws/live for full-duplex PCM streaming.</span>
               </li>
             </ul>
+          </div>
+        </section>
+
+        <!-- Reference Audio Samples Section (Day 6 - Dev B) -->
+        <section class="reference-samples-card" id="reference-samples" aria-label="Reference Case Audio Recordings">
+          <div class="reference-header">
+            <div class="log-heading-group">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <path d="M9 18V5l12-2v13"/>
+                <circle cx="6" cy="18" r="3"/>
+                <circle cx="18" cy="16" r="3"/>
+              </svg>
+              <h2>Reference Case Recordings (5 Ca Đối Chứng Benchmark)</h2>
+            </div>
+            <a href="/data/audio_samples/sample_manifest.json" target="_blank" class="manifest-link" title="Xem metadata manifest JSON">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+              </svg>
+              <span>Manifest JSON</span>
+            </a>
+          </div>
+          <div class="reference-grid">
+            <div class="ref-item">
+              <div class="ref-meta">
+                <span class="ref-badge vi">Case 1: Tiếng Việt</span>
+                <strong class="ref-name">fluent_dialogue_vi.wav</strong>
+                <span class="ref-stat">TTFA: 435ms • 4.5s • S2S Đàm thoại</span>
+              </div>
+              <audio controls src="/data/audio_samples/fluent_dialogue_vi.wav" preload="none" class="ref-audio"></audio>
+            </div>
+            <div class="ref-item">
+              <div class="ref-meta">
+                <span class="ref-badge en">Case 2: Tiếng Anh</span>
+                <strong class="ref-name">fluent_dialogue_en.wav</strong>
+                <span class="ref-stat">TTFA: 418ms • 4.0s • Natural English</span>
+              </div>
+              <audio controls src="/data/audio_samples/fluent_dialogue_en.wav" preload="none" class="ref-audio"></audio>
+            </div>
+            <div class="ref-item">
+              <div class="ref-meta">
+                <span class="ref-badge barge">Case 3: Barge-in</span>
+                <strong class="ref-name">barge_in_interruption.wav</strong>
+                <span class="ref-stat">Cutoff: 142ms (&lt;250ms) • 3.5s</span>
+              </div>
+              <audio controls src="/data/audio_samples/barge_in_interruption.wav" preload="none" class="ref-audio"></audio>
+            </div>
+            <div class="ref-item">
+              <div class="ref-meta">
+                <span class="ref-badge tool">Case 4: Tool Tra Giờ</span>
+                <strong class="ref-name">tool_current_time.wav</strong>
+                <span class="ref-stat">Tool: 12.5ms • TTFA: 460ms</span>
+              </div>
+              <audio controls src="/data/audio_samples/tool_current_time.wav" preload="none" class="ref-audio"></audio>
+            </div>
+            <div class="ref-item">
+              <div class="ref-meta">
+                <span class="ref-badge tool">Case 5: Tool Phòng Họp</span>
+                <strong class="ref-name">tool_meeting_room.wav</strong>
+                <span class="ref-stat">Tool: 28.4ms • TTFA: 478ms</span>
+              </div>
+              <audio controls src="/data/audio_samples/tool_meeting_room.wav" preload="none" class="ref-audio"></audio>
+            </div>
           </div>
         </section>
 
